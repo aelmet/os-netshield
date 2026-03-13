@@ -1,0 +1,131 @@
+<?xml version="1.0"?>
+<!--
+    SPDX-License-Identifier: BSD-2-Clause
+    Copyright (C) 2024-2026 NetShield Contributors
+-->
+<acl>
+
+    <!--
+        Full access to all NetShield UI pages and API endpoints.
+        Assign this privilege to grant complete NetShield administration.
+    -->
+    <page-netshield>
+        <name>Services: NetShield</name>
+        <description>Allow access to all NetShield pages and API endpoints</description>
+        <match>
+            <pattern>ui/netshield/*</pattern>
+            <pattern>api/netshield/*</pattern>
+        </match>
+    </page-netshield>
+
+    <!--
+        Settings API — read/write all configuration fields.
+    -->
+    <page-netshield-settings>
+        <name>Services: NetShield: Settings API</name>
+        <description>Allow access to the NetShield settings API (CRUD on all config sections)</description>
+        <match>
+            <pattern>api/netshield/settings/*</pattern>
+        </match>
+    </page-netshield-settings>
+
+    <!--
+        Service control — start/stop/restart/reconfigure the daemon.
+    -->
+    <page-netshield-service>
+        <name>Services: NetShield: Service Control API</name>
+        <description>Allow starting, stopping, and reconfiguring the NetShield service</description>
+        <match>
+            <pattern>api/netshield/service/*</pattern>
+        </match>
+    </page-netshield-service>
+
+    <!--
+        Alerts — view, query, and flush alert history.
+    -->
+    <page-netshield-alerts>
+        <name>Services: NetShield: Alerts API</name>
+        <description>Allow access to NetShield alert history and statistics</description>
+        <match>
+            <pattern>api/netshield/alerts/*</pattern>
+        </match>
+    </page-netshield-alerts>
+
+    <!--
+        Devices — list discovered devices, quarantine/unquarantine.
+    -->
+    <page-netshield-devices>
+        <name>Services: NetShield: Devices API</name>
+        <description>Allow access to NetShield device discovery and quarantine controls</description>
+        <match>
+            <pattern>api/netshield/devices/*</pattern>
+        </match>
+    </page-netshield-devices>
+
+    <!--
+        Policies — apply and query enforcement policy status.
+    -->
+    <page-netshield-policies>
+        <name>Services: NetShield: Policies API</name>
+        <description>Allow access to NetShield policy management and enforcement</description>
+        <match>
+            <pattern>api/netshield/policies/*</pattern>
+        </match>
+    </page-netshield-policies>
+
+    <!--
+        Application signatures — CRUD for app identification rules.
+    -->
+    <page-netshield-appsignatures>
+        <name>Services: NetShield: Application Signatures API</name>
+        <description>Allow management of NetShield application identification signatures</description>
+        <match>
+            <pattern>api/netshield/appsignatures/*</pattern>
+        </match>
+    </page-netshield-appsignatures>
+
+    <!--
+        Web categories — CRUD for URL/domain category lists.
+    -->
+    <page-netshield-webcategories>
+        <name>Services: NetShield: Web Categories API</name>
+        <description>Allow management of NetShield web content categories</description>
+        <match>
+            <pattern>api/netshield/webcategories/*</pattern>
+        </match>
+    </page-netshield-webcategories>
+
+    <!--
+        Target lists — CRUD for domain/IP block and allow lists.
+    -->
+    <page-netshield-targetlists>
+        <name>Services: NetShield: Target Lists API</name>
+        <description>Allow management of NetShield domain and IP target lists</description>
+        <match>
+            <pattern>api/netshield/targetlists/*</pattern>
+        </match>
+    </page-netshield-targetlists>
+
+    <!--
+        DNS filtering — DNS enforcement settings.
+    -->
+    <page-netshield-dns>
+        <name>Services: NetShield: DNS Filtering API</name>
+        <description>Allow access to NetShield DNS filtering configuration</description>
+        <match>
+            <pattern>api/netshield/dns/*</pattern>
+        </match>
+    </page-netshield-dns>
+
+    <!--
+        GeoIP blocking — country-based firewall rules.
+    -->
+    <page-netshield-geoip>
+        <name>Services: NetShield: GeoIP API</name>
+        <description>Allow access to NetShield GeoIP country blocking configuration</description>
+        <match>
+            <pattern>api/netshield/geoip/*</pattern>
+        </match>
+    </page-netshield-geoip>
+
+</acl>

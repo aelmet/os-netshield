@@ -1,0 +1,100 @@
+#!/bin/sh
+# NetShield post-install script
+# SPDX-License-Identifier: BSD-2-Clause
+
+set -e
+
+NETSHIELD_DB_DIR="/var/db/netshield"
+NETSHIELD_LOG_DIR="/var/log/netshield"
+NETSHIELD_SCRIPTS="/usr/local/opnsense/scripts/netshield"
+NETSHIELD_CONF_DIR="/usr/local/etc/netshield"
+
+echo "==> NetShield: Running post-install setup..."
+
+# Detect OPNsense version
+if [ -f /usr/local/opnsense/version/core ]; then
+    OPNSENSE_VERSION=$(cat /usr/local/opnsense/version/core 2>/dev/null || echo "unknown")
+    echo "==> NetShield: Detected OPNsense version: ${OPNSENSE_VERSION}"
+else
+    echo "==> NetShield: WARNING - Could not detect OPNsense version"
+fi
+
+# Create required data directories
+echo "==> NetShield: Creating data directories..."
+for dir in \
+    "${NETSHIELD_DB_DIR}" \
+    "${NETSHIELD_DB_DIR}/geoip" \
+    "${NETSHIELD_DB_DIR}/targetlists" \
+    "${NETSHIELD_DB_DIR}/appsigs" \
+    "${NETSHIELD_LOG_DIR}"; do
+    if [ ! -d "${dir}" ]; then
+        mkdir -p "${dir}"
+        echo "    Created: ${dir}"
+    fi
+done
+
+# Create config directory
+if [ ! -d "${NETSHIELD_CONF_DIR}" ]; then
+    mkdir -p "${NETSHIELD_CONF_DIR}"
+    echo "    Created: ${NETSHIELD_CONF_DIR}"
+fi
+
+# Set proper permissions (0750 — root:wheel)
+echo "==> NetShield: Setting permissions..."
+chown -R root:wheel "${NETSHIELD_DB_DIR}"
+chown -R root:wheel "${NETSHIELD_LOG_DIR}"
+chmod -R 0750 "${NETSHIELD_DB_DIR}"
+chmod -R 0750 "${NETSHIELD_LOG_DIR}"
+
+# Make scripts executable
+if [ -d "${NETSHIELD_SCRIPTS}" ]; then
+    find "${NETSHIELD_SCRIPTS}" -name "*.py" -exec chmod 0755 {} \;
+    find "${NETSHIELD_SCRIPTS}" -name "*.sh" -exec chmod 0755 {} \;
+    echo "==> NetShield: Script permissions set."
+fi
+
+# Run dependency setup
+SETUP_SCRIPT="${NETSHIELD_SCRIPTS}/setup.sh"
+if [ -f "${SETUP_SCRIPT}" ]; then
+    echo "==> NetShield: Running setup.sh for dependencies..."
+    sh "${SETUP_SCRIPT}" || echo "==> NetShield: WARNING - setup.sh encountered errors (non-fatal)"
+else
+    echo "==> NetShield: WARNING - setup.sh not found, skipping dependency setup"
+fi
+
+# Initialize empty SQLite databases if they do not exist
+DB_FILE="${NETSHIELD_DB_DIR}/netshield.db"
+if [ ! -f "${DB_FILE}" ]; then
+    echo "==> NetShield: Initializing empty database..."
+    INIT_SCRIPT="${NETSHIELD_SCRIPTS}/db_init.py"
+    if [ -f "${INIT_SCRIPT}" ]; then
+        python3 "${INIT_SCRIPT}" --init || echo "==> NetShield: WARNING - db_init.py failed (non-fatal)"
+    else
+        # Minimal bootstrap: create an empty placeholder so scripts don't fail on first run
+        sqlite3 "${DB_FILE}" "PRAGMA journal_mode=WAL;" 2>/dev/null || true
+    fi
+    chown root:wheel "${DB_FILE}"
+    chmod 0640 "${DB_FILE}"
+fi
+
+# Register configd templates
+echo "==> NetShield: Registering configd templates..."
+if [ -x /usr/local/opnsense/scripts/filter/generate_template.py ]; then
+    python3 /usr/local/opnsense/scripts/filter/generate_template.py OPNsense/NetShield \
+        2>/dev/null || true
+fi
+
+if command -v configctl >/dev/null 2>&1; then
+    configctl template reload OPNsense/NetShield 2>/dev/null || true
+fi
+
+# Restart configd to pick up new actions
+echo "==> NetShield: Restarting configd..."
+if [ -x /usr/local/etc/rc.d/configd ]; then
+    /usr/local/etc/rc.d/configd restart 2>/dev/null || true
+elif command -v service >/dev/null 2>&1; then
+    service configd restart 2>/dev/null || true
+fi
+
+echo "==> NetShield: Post-install complete."
+echo "    Visit Services -> NetShield in the OPNsense UI to configure."

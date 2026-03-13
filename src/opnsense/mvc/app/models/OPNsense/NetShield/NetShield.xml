@@ -1,0 +1,543 @@
+<?xml version="1.0"?>
+<!--
+    SPDX-License-Identifier: BSD-2-Clause
+    Copyright (C) 2024-2026 NetShield Contributors
+-->
+<model>
+    <mount>//OPNsense/netshield</mount>
+    <description>NetShield - Network Security Plugin</description>
+    <version>1.0.0</version>
+    <items>
+
+        <!-- ======================================================= -->
+        <!-- GENERAL                                                   -->
+        <!-- ======================================================= -->
+        <general>
+
+            <enabled>
+                <type>BooleanField</type>
+                <default>0</default>
+                <Required>Y</Required>
+                <help>Enable NetShield service</help>
+            </enabled>
+
+            <log_level>
+                <type>OptionField</type>
+                <default>INFO</default>
+                <Required>Y</Required>
+                <OptionValues>
+                    <INFO>INFO</INFO>
+                    <DEBUG>DEBUG</DEBUG>
+                    <WARNING>WARNING</WARNING>
+                    <ERROR>ERROR</ERROR>
+                </OptionValues>
+                <help>Logging verbosity level</help>
+            </log_level>
+
+            <check_interval>
+                <type>IntegerField</type>
+                <default>60</default>
+                <MinimumValue>10</MinimumValue>
+                <MaximumValue>300</MaximumValue>
+                <Required>Y</Required>
+                <help>Device discovery interval in seconds (10-300)</help>
+            </check_interval>
+
+            <alert_cooldown>
+                <type>IntegerField</type>
+                <default>15</default>
+                <MinimumValue>1</MinimumValue>
+                <MaximumValue>1440</MaximumValue>
+                <Required>Y</Required>
+                <help>Alert deduplication window in minutes (1-1440)</help>
+            </alert_cooldown>
+
+        </general>
+
+        <!-- ======================================================= -->
+        <!-- DNS                                                       -->
+        <!-- ======================================================= -->
+        <dns>
+
+            <dns_filtering_enabled>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Enable DNS-based content filtering</help>
+            </dns_filtering_enabled>
+
+            <safe_search_enabled>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Force SafeSearch on Google, YouTube, and Bing</help>
+            </safe_search_enabled>
+
+            <block_doh>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Block DNS-over-HTTPS and DNS-over-TLS to prevent filter bypass</help>
+            </block_doh>
+
+        </dns>
+
+        <!-- ======================================================= -->
+        <!-- DETECTION                                                 -->
+        <!-- ======================================================= -->
+        <detection>
+
+            <dpi_enabled>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Enable Deep Packet Inspection for application identification</help>
+            </dpi_enabled>
+
+            <vpn_detection_enabled>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Enable VPN and proxy tunnel detection</help>
+            </vpn_detection_enabled>
+
+            <device_tracking_enabled>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Enable network device discovery and tracking</help>
+            </device_tracking_enabled>
+
+            <suricata_integration>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Integrate with Suricata IDS/IPS for enhanced threat detection</help>
+            </suricata_integration>
+
+        </detection>
+
+        <!-- ======================================================= -->
+        <!-- ENFORCEMENT                                               -->
+        <!-- ======================================================= -->
+        <enforcement>
+
+            <force_dns>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Redirect all client DNS queries to the gateway DNS server</help>
+            </force_dns>
+
+            <block_vpn_ports>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Block common VPN ports (WireGuard UDP/51820, OpenVPN UDP/1194, IPsec UDP/500,4500)</help>
+            </block_vpn_ports>
+
+            <block_proxy_ports>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Block common proxy ports (SOCKS5 TCP/1080, HTTP proxy TCP/3128,8080,8888)</help>
+            </block_proxy_ports>
+
+        </enforcement>
+
+        <!-- ======================================================= -->
+        <!-- ALERTS                                                    -->
+        <!-- ======================================================= -->
+        <alerts>
+
+            <syslog_enabled>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Forward alerts to an external syslog server</help>
+            </syslog_enabled>
+
+            <syslog_host>
+                <type>TextField</type>
+                <default/>
+                <help>Syslog server hostname or IP address</help>
+            </syslog_host>
+
+            <syslog_port>
+                <type>PortField</type>
+                <default>514</default>
+                <EnableRanges>Y</EnableRanges>
+                <help>Syslog server UDP/TCP port (default 514)</help>
+            </syslog_port>
+
+            <syslog_protocol>
+                <type>OptionField</type>
+                <default>udp</default>
+                <Required>Y</Required>
+                <OptionValues>
+                    <udp>UDP</udp>
+                    <tcp>TCP</tcp>
+                </OptionValues>
+                <help>Transport protocol for syslog messages</help>
+            </syslog_protocol>
+
+            <webhook_enabled>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Send alert notifications to a generic webhook endpoint</help>
+            </webhook_enabled>
+
+            <webhook_url>
+                <type>UrlField</type>
+                <default/>
+                <help>Webhook URL to receive JSON-encoded alert payloads</help>
+            </webhook_url>
+
+        </alerts>
+
+        <!-- ======================================================= -->
+        <!-- GEOIP                                                     -->
+        <!-- ======================================================= -->
+        <geoip>
+
+            <geoip_enabled>
+                <type>BooleanField</type>
+                <default>0</default>
+                <help>Enable GeoIP-based country blocking</help>
+            </geoip_enabled>
+
+        </geoip>
+
+        <!-- ======================================================= -->
+        <!-- DEVICES                                                   -->
+        <!-- ======================================================= -->
+        <devices>
+
+            <device type="ArrayField">
+
+                <name>
+                    <type>TextField</type>
+                    <Required>Y</Required>
+                    <mask>/^[\w\s\-\.]{1,64}$/u</mask>
+                    <help>Friendly device name (1-64 characters)</help>
+                </name>
+
+                <mac>
+                    <type>TextField</type>
+                    <Required>Y</Required>
+                    <mask>/^([0-9A-Fa-f]{2}[:\-]){5}([0-9A-Fa-f]{2})$/</mask>
+                    <help>Device MAC address (e.g. AA:BB:CC:DD:EE:FF)</help>
+                </mac>
+
+                <ip>
+                    <type>NetworkField</type>
+                    <Required>N</Required>
+                    <help>Last known IP address or static assignment</help>
+                </ip>
+
+                <category>
+                    <type>OptionField</type>
+                    <default>other</default>
+                    <Required>Y</Required>
+                    <OptionValues>
+                        <smartphone>Smartphone</smartphone>
+                        <laptop>Laptop</laptop>
+                        <tablet>Tablet</tablet>
+                        <printer>Printer</printer>
+                        <tv>Smart TV</tv>
+                        <iot>IoT Device</iot>
+                        <server>Server</server>
+                        <other>Other</other>
+                    </OptionValues>
+                    <help>Device category for policy targeting</help>
+                </category>
+
+                <approved>
+                    <type>BooleanField</type>
+                    <default>0</default>
+                    <help>Mark device as approved/trusted on the network</help>
+                </approved>
+
+                <description>
+                    <type>TextField</type>
+                    <Required>N</Required>
+                    <help>Optional notes about this device</help>
+                </description>
+
+            </device>
+
+        </devices>
+
+        <!-- ======================================================= -->
+        <!-- POLICIES                                                  -->
+        <!-- ======================================================= -->
+        <policies>
+
+            <policy type="ArrayField">
+
+                <name>
+                    <type>TextField</type>
+                    <Required>Y</Required>
+                    <mask>/^[\w\s\-\.]{1,64}$/u</mask>
+                    <help>Policy name</help>
+                </name>
+
+                <enabled>
+                    <type>BooleanField</type>
+                    <default>1</default>
+                    <help>Enable or disable this policy</help>
+                </enabled>
+
+                <scope>
+                    <type>OptionField</type>
+                    <default>network</default>
+                    <Required>Y</Required>
+                    <OptionValues>
+                        <network>Network (all devices)</network>
+                        <vlan>VLAN</vlan>
+                        <device>Specific Device</device>
+                        <device_category>Device Category</device_category>
+                    </OptionValues>
+                    <help>What this policy applies to</help>
+                </scope>
+
+                <scope_value>
+                    <type>CSVListField</type>
+                    <Required>N</Required>
+                    <help>Scope identifiers (VLAN IDs, MAC addresses, or category names)</help>
+                </scope_value>
+
+                <action>
+                    <type>OptionField</type>
+                    <default>block</default>
+                    <Required>Y</Required>
+                    <OptionValues>
+                        <block>Block</block>
+                        <allow>Allow</allow>
+                        <throttle>Throttle (bandwidth limit)</throttle>
+                        <log>Log only</log>
+                    </OptionValues>
+                    <help>Action to take when this policy matches</help>
+                </action>
+
+                <target_type>
+                    <type>OptionField</type>
+                    <default>all</default>
+                    <Required>Y</Required>
+                    <OptionValues>
+                        <apps>Applications</apps>
+                        <web_categories>Web Categories</web_categories>
+                        <targetlists>Target Lists</targetlists>
+                        <all>All Traffic</all>
+                    </OptionValues>
+                    <help>What traffic this policy targets</help>
+                </target_type>
+
+                <target_value>
+                    <type>CSVListField</type>
+                    <Required>N</Required>
+                    <help>Comma-separated list of target names (app names, category names, or list names)</help>
+                </target_value>
+
+                <schedule_days>
+                    <type>CSVListField</type>
+                    <default>Mon,Tue,Wed,Thu,Fri,Sat,Sun</default>
+                    <Required>N</Required>
+                    <help>Days policy is active (Mon,Tue,Wed,Thu,Fri,Sat,Sun)</help>
+                </schedule_days>
+
+                <schedule_start>
+                    <type>TextField</type>
+                    <default>00:00</default>
+                    <mask>/^([01]\d|2[0-3]):[0-5]\d$/</mask>
+                    <help>Daily start time in HH:MM format</help>
+                </schedule_start>
+
+                <schedule_end>
+                    <type>TextField</type>
+                    <default>23:59</default>
+                    <mask>/^([01]\d|2[0-3]):[0-5]\d$/</mask>
+                    <help>Daily end time in HH:MM format</help>
+                </schedule_end>
+
+                <bandwidth_limit>
+                    <type>IntegerField</type>
+                    <default>0</default>
+                    <MinimumValue>0</MinimumValue>
+                    <help>Bandwidth throttle limit (0 = unlimited). Used when action is throttle.</help>
+                </bandwidth_limit>
+
+                <bandwidth_unit>
+                    <type>OptionField</type>
+                    <default>Mbit</default>
+                    <Required>Y</Required>
+                    <OptionValues>
+                        <Kbit>Kbit/s</Kbit>
+                        <Mbit>Mbit/s</Mbit>
+                    </OptionValues>
+                    <help>Unit for bandwidth limit</help>
+                </bandwidth_unit>
+
+                <priority>
+                    <type>IntegerField</type>
+                    <default>100</default>
+                    <MinimumValue>1</MinimumValue>
+                    <MaximumValue>65535</MaximumValue>
+                    <help>Policy evaluation priority (lower number = higher priority)</help>
+                </priority>
+
+                <description>
+                    <type>TextField</type>
+                    <Required>N</Required>
+                    <help>Optional description of this policy</help>
+                </description>
+
+            </policy>
+
+        </policies>
+
+        <!-- ======================================================= -->
+        <!-- APPLICATIONS                                              -->
+        <!-- ======================================================= -->
+        <applications>
+
+            <app type="ArrayField">
+
+                <name>
+                    <type>TextField</type>
+                    <Required>Y</Required>
+                    <mask>/^[\w\s\-\.]{1,64}$/u</mask>
+                    <help>Application name</help>
+                </name>
+
+                <category>
+                    <type>OptionField</type>
+                    <default>other</default>
+                    <Required>Y</Required>
+                    <OptionValues>
+                        <social_media>Social Media</social_media>
+                        <streaming>Streaming &amp; Media</streaming>
+                        <gaming>Gaming</gaming>
+                        <communication>Communication</communication>
+                        <productivity>Productivity</productivity>
+                        <cryptocurrency>Cryptocurrency</cryptocurrency>
+                        <vpn_proxy>VPN &amp; Proxy</vpn_proxy>
+                        <p2p>P2P &amp; Torrents</p2p>
+                        <shopping>Shopping</shopping>
+                        <news>News &amp; Media</news>
+                        <adult>Adult Content</adult>
+                        <other>Other</other>
+                    </OptionValues>
+                    <help>Application category for policy targeting</help>
+                </category>
+
+                <domains>
+                    <type>TextField</type>
+                    <Required>N</Required>
+                    <help>Comma-separated domain patterns (e.g. *.example.com, example.com)</help>
+                </domains>
+
+                <sni_patterns>
+                    <type>TextField</type>
+                    <Required>N</Required>
+                    <help>Comma-separated TLS SNI hostname patterns for DPI matching</help>
+                </sni_patterns>
+
+                <enabled>
+                    <type>BooleanField</type>
+                    <default>1</default>
+                    <help>Enable this application signature</help>
+                </enabled>
+
+            </app>
+
+        </applications>
+
+        <!-- ======================================================= -->
+        <!-- WEB CATEGORIES                                            -->
+        <!-- ======================================================= -->
+        <webcategories>
+
+            <category type="ArrayField">
+
+                <name>
+                    <type>TextField</type>
+                    <Required>Y</Required>
+                    <mask>/^[\w\s\-\.]{1,64}$/u</mask>
+                    <help>Category name</help>
+                </name>
+
+                <enabled>
+                    <type>BooleanField</type>
+                    <default>1</default>
+                    <help>Enable this web category</help>
+                </enabled>
+
+                <source_url>
+                    <type>UrlField</type>
+                    <Required>N</Required>
+                    <help>URL to fetch category domain list from</help>
+                </source_url>
+
+                <description>
+                    <type>TextField</type>
+                    <Required>N</Required>
+                    <help>Description of this web category</help>
+                </description>
+
+            </category>
+
+        </webcategories>
+
+        <!-- ======================================================= -->
+        <!-- TARGET LISTS                                              -->
+        <!-- ======================================================= -->
+        <targetlists>
+
+            <targetlist type="ArrayField">
+
+                <name>
+                    <type>TextField</type>
+                    <Required>Y</Required>
+                    <mask>/^[\w\s\-\.]{1,64}$/u</mask>
+                    <help>Target list name</help>
+                </name>
+
+                <enabled>
+                    <type>BooleanField</type>
+                    <default>1</default>
+                    <help>Enable this target list</help>
+                </enabled>
+
+                <list_type>
+                    <type>OptionField</type>
+                    <default>domain</default>
+                    <Required>Y</Required>
+                    <OptionValues>
+                        <domain>Domain list</domain>
+                        <ip>IP/CIDR list</ip>
+                        <mixed>Mixed (domains and IPs)</mixed>
+                    </OptionValues>
+                    <help>Type of entries in this list</help>
+                </list_type>
+
+                <source_url>
+                    <type>UrlField</type>
+                    <Required>N</Required>
+                    <help>URL to fetch the list from (one entry per line)</help>
+                </source_url>
+
+                <update_interval>
+                    <type>OptionField</type>
+                    <default>daily</default>
+                    <Required>Y</Required>
+                    <OptionValues>
+                        <hourly>Hourly</hourly>
+                        <daily>Daily</daily>
+                        <weekly>Weekly</weekly>
+                        <manual>Manual only</manual>
+                    </OptionValues>
+                    <help>How often to refresh this list from the source URL</help>
+                </update_interval>
+
+                <description>
+                    <type>TextField</type>
+                    <Required>N</Required>
+                    <help>Description of this target list and its purpose</help>
+                </description>
+
+            </targetlist>
+
+        </targetlists>
+
+    </items>
+</model>

@@ -1,0 +1,22 @@
+# NetShield Python requirements
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Philosophy: use stdlib wherever possible. Only list packages that provide
+# functionality genuinely unavailable in Python 3.10 stdlib.
+#
+# All stdlib modules used by NetShield (no pip needed):
+#   sqlite3, json, os, sys, re, socket, struct, logging, configparser,
+#   threading, subprocess, ipaddress, datetime, pathlib, hashlib,
+#   urllib.request, urllib.parse, argparse, signal, time, collections
+#
+# Optional: MaxMind GeoIP2 reader — only needed if geoip_enabled = 1
+# The daemon checks for this at runtime and disables GeoIP if absent.
+# To install manually: pip install maxminddb
+#
+# Uncomment the line below if you want GeoIP support installed automatically:
+# maxminddb>=2.0.0
+
+# Optional: faster JSON parsing for high-throughput alert processing.
+# Falls back to stdlib json if not present (functionally identical, ~2x slower).
+# Uncomment if processing >10k alerts/sec:
+# orjson>=3.9.0

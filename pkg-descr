@@ -1,0 +1,19 @@
+NetShield - Comprehensive Network Security Suite for OPNsense
+
+Features:
+- Application Identification: Detect and control 50+ applications via SNI/domain analysis
+- Per-App/Device/VLAN/Network Blocking: Granular policy engine with scheduling
+- DNS Filtering: Unbound-based domain blocking with safe search enforcement
+- Web Category Blocking: 60+ content categories with custom overrides
+- VPN/Proxy Detection: Detect and block unauthorized VPN, proxy, and tunnel usage
+- Device Tracking: Auto-discover and manage network devices via ARP/DHCP
+- GeoIP Blocking: Block traffic by country using MaxMind databases
+- Custom Target Lists: Import and sync external blocklists
+- Real-time Dashboard: Live statistics, alerts, and management interface
+- Threat Intelligence: Suricata IDS/IPS integration with alert correlation
+- DoH/DoT Bypass Prevention: Block DNS-over-HTTPS bypass attempts
+
+All blocking is enforced via Unbound DNS + pf firewall rules.
+No outbound telemetry or phone-home functionality.
+
+WWW: https://github.com/netshield-community/os-netshield

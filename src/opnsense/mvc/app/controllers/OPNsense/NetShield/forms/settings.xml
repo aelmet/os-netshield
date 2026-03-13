@@ -1,0 +1,216 @@
+<?xml version="1.0"?>
+<!--
+    SPDX-License-Identifier: BSD-2-Clause
+    Copyright (C) 2024-2026 NetShield Contributors
+
+    Settings page form — full settings form with labelled sections.
+    This form mirrors general.xml but is structured with explicit
+    section groupings to drive the tabbed settings UI layout.
+    Individual tab panels reference the same model paths.
+-->
+<form>
+
+    <!-- ============================================================= -->
+    <!-- Tab: General                                                    -->
+    <!-- ============================================================= -->
+    <tab id="general" description="General">
+
+        <subtab id="general-basic" description="Service">
+            <field>
+                <id>netshield.general.enabled</id>
+                <label>Enable NetShield</label>
+                <type>checkbox</type>
+                <help>Master switch — enable the NetShield service and all configured features.</help>
+            </field>
+
+            <field>
+                <id>netshield.general.log_level</id>
+                <label>Log Level</label>
+                <type>dropdown</type>
+                <help>Verbosity of the NetShield service log. Use DEBUG only for troubleshooting.</help>
+            </field>
+
+            <field>
+                <id>netshield.general.check_interval</id>
+                <label>Device Discovery Interval (seconds)</label>
+                <type>text</type>
+                <help>How often NetShield scans for new or changed devices on the network (10–300 seconds).</help>
+            </field>
+
+            <field>
+                <id>netshield.general.alert_cooldown</id>
+                <label>Alert Cooldown (minutes)</label>
+                <type>text</type>
+                <help>Minimum time between repeated alerts for the same event (1–1440 minutes).</help>
+            </field>
+        </subtab>
+
+    </tab>
+
+    <!-- ============================================================= -->
+    <!-- Tab: Detection                                                  -->
+    <!-- ============================================================= -->
+    <tab id="detection" description="Detection">
+
+        <subtab id="detection-dpi" description="Deep Packet Inspection">
+            <field>
+                <id>netshield.detection.dpi_enabled</id>
+                <label>Enable DPI</label>
+                <type>checkbox</type>
+                <help>Enable application identification via Deep Packet Inspection. Required for application-based policies.</help>
+            </field>
+
+            <field>
+                <id>netshield.detection.vpn_detection_enabled</id>
+                <label>Enable VPN Detection</label>
+                <type>checkbox</type>
+                <help>Detect VPN protocols and anonymising tunnels.</help>
+            </field>
+
+            <field>
+                <id>netshield.detection.device_tracking_enabled</id>
+                <label>Enable Device Tracking</label>
+                <type>checkbox</type>
+                <help>Continuously track connected devices by MAC address, hostname, and fingerprint.</help>
+            </field>
+
+            <field>
+                <id>netshield.detection.suricata_integration</id>
+                <label>Suricata Integration</label>
+                <type>checkbox</type>
+                <help>Consume Suricata EVE JSON alerts to enrich NetShield threat detection. Requires Suricata.</help>
+            </field>
+        </subtab>
+
+    </tab>
+
+    <!-- ============================================================= -->
+    <!-- Tab: DNS                                                        -->
+    <!-- ============================================================= -->
+    <tab id="dns" description="DNS">
+
+        <subtab id="dns-filtering" description="DNS Filtering">
+            <field>
+                <id>netshield.dns.dns_filtering_enabled</id>
+                <label>Enable DNS Filtering</label>
+                <type>checkbox</type>
+                <help>Enable DNS-based content filtering.</help>
+            </field>
+
+            <field>
+                <id>netshield.dns.safe_search_enabled</id>
+                <label>Force Safe Search</label>
+                <type>checkbox</type>
+                <help>Redirect Google, YouTube, and Bing to their SafeSearch endpoints.</help>
+            </field>
+
+            <field>
+                <id>netshield.dns.block_doh</id>
+                <label>Block DoH / DoT</label>
+                <type>checkbox</type>
+                <help>Block DNS-over-HTTPS and DNS-over-TLS providers to prevent filter bypass.</help>
+            </field>
+        </subtab>
+
+    </tab>
+
+    <!-- ============================================================= -->
+    <!-- Tab: Enforcement                                                -->
+    <!-- ============================================================= -->
+    <tab id="enforcement" description="Enforcement">
+
+        <subtab id="enforcement-rules" description="Firewall Enforcement">
+            <field>
+                <id>netshield.enforcement.force_dns</id>
+                <label>Force DNS through Gateway</label>
+                <type>checkbox</type>
+                <help>Redirect all outbound DNS queries to the gateway DNS server.</help>
+            </field>
+
+            <field>
+                <id>netshield.enforcement.block_vpn_ports</id>
+                <label>Block VPN Ports</label>
+                <type>checkbox</type>
+                <help>Block outbound WireGuard (UDP/51820), OpenVPN (UDP/1194), and IPsec (UDP/500, UDP/4500) ports.</help>
+            </field>
+
+            <field>
+                <id>netshield.enforcement.block_proxy_ports</id>
+                <label>Block Proxy Ports</label>
+                <type>checkbox</type>
+                <help>Block outbound SOCKS5 (TCP/1080) and common HTTP proxy (TCP/3128, TCP/8080, TCP/8888) ports.</help>
+            </field>
+        </subtab>
+
+    </tab>
+
+    <!-- ============================================================= -->
+    <!-- Tab: GeoIP                                                      -->
+    <!-- ============================================================= -->
+    <tab id="geoip" description="GeoIP">
+
+        <subtab id="geoip-basic" description="GeoIP Blocking">
+            <field>
+                <id>netshield.geoip.geoip_enabled</id>
+                <label>Enable GeoIP Blocking</label>
+                <type>checkbox</type>
+                <help>Enable country-based traffic blocking. Configure blocked countries on the GeoIP page.</help>
+            </field>
+        </subtab>
+
+    </tab>
+
+    <!-- ============================================================= -->
+    <!-- Tab: Alerts                                                     -->
+    <!-- ============================================================= -->
+    <tab id="alerts" description="Alerts">
+
+        <subtab id="alerts-syslog" description="Syslog">
+            <field>
+                <id>netshield.alerts.syslog_enabled</id>
+                <label>Enable Syslog Forwarding</label>
+                <type>checkbox</type>
+                <help>Forward NetShield alerts to an external syslog server.</help>
+            </field>
+
+            <field>
+                <id>netshield.alerts.syslog_host</id>
+                <label>Syslog Host</label>
+                <type>text</type>
+                <help>Hostname or IP address of the syslog server.</help>
+            </field>
+
+            <field>
+                <id>netshield.alerts.syslog_port</id>
+                <label>Syslog Port</label>
+                <type>text</type>
+                <help>Port on the syslog server (default: 514).</help>
+            </field>
+
+            <field>
+                <id>netshield.alerts.syslog_protocol</id>
+                <label>Syslog Protocol</label>
+                <type>dropdown</type>
+                <help>Transport protocol: UDP (default, lower overhead) or TCP (reliable delivery).</help>
+            </field>
+        </subtab>
+
+        <subtab id="alerts-webhook" description="Webhook">
+            <field>
+                <id>netshield.alerts.webhook_enabled</id>
+                <label>Enable Webhook Notifications</label>
+                <type>checkbox</type>
+                <help>POST JSON alert payloads to an HTTP/HTTPS endpoint.</help>
+            </field>
+
+            <field>
+                <id>netshield.alerts.webhook_url</id>
+                <label>Webhook URL</label>
+                <type>text</type>
+                <help>Full URL of the webhook endpoint. Supports Slack incoming webhooks, Teams connectors, and custom HTTP receivers.</help>
+            </field>
+        </subtab>
+
+    </tab>
+
+</form>

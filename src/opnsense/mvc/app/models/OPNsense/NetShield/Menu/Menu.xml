@@ -1,0 +1,84 @@
+<?xml version="1.0"?>
+<!--
+    SPDX-License-Identifier: BSD-2-Clause
+    Copyright (C) 2024-2026 NetShield Contributors
+-->
+<menu>
+
+    <Services order="1">
+        <NetShield order="90" visiblename="NetShield" cssclass="fa fa-shield">
+
+            <Dashboard
+                order="0"
+                visiblename="Dashboard"
+                url="/ui/netshield"
+                acl="page-netshield"
+            />
+
+            <Devices
+                order="1"
+                visiblename="Devices"
+                url="/ui/netshield/devices"
+                acl="page-netshield-devices,page-netshield"
+            />
+
+            <Policies
+                order="2"
+                visiblename="Policies"
+                url="/ui/netshield/policies"
+                acl="page-netshield-policies,page-netshield"
+            />
+
+            <Applications
+                order="3"
+                visiblename="Applications"
+                url="/ui/netshield/applications"
+                acl="page-netshield-appsignatures,page-netshield"
+            />
+
+            <WebCategories
+                order="4"
+                visiblename="Web Categories"
+                url="/ui/netshield/webcategories"
+                acl="page-netshield-webcategories,page-netshield"
+            />
+
+            <DnsFiltering
+                order="5"
+                visiblename="DNS Filtering"
+                url="/ui/netshield/dns"
+                acl="page-netshield-dns,page-netshield"
+            />
+
+            <TargetLists
+                order="6"
+                visiblename="Target Lists"
+                url="/ui/netshield/targetlists"
+                acl="page-netshield-targetlists,page-netshield"
+            />
+
+            <GeoIP
+                order="7"
+                visiblename="GeoIP"
+                url="/ui/netshield/geoip"
+                acl="page-netshield-geoip,page-netshield"
+            />
+
+            <Alerts
+                order="8"
+                visiblename="Alerts"
+                url="/ui/netshield/alerts"
+                acl="page-netshield-alerts,page-netshield"
+            />
+
+            <Settings
+                order="9"
+                visiblename="Settings"
+                url="/ui/netshield/settings"
+                acl="page-netshield-settings,page-netshield"
+            />
+
+        </NetShield>
+    </Services>
+
+</menu>
