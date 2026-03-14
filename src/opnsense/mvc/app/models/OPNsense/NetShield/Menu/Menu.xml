@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<!--
+    Copyright (C) 2025 NetShield
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+-->
+<menu>
+    <Services>
+        <NetShield order="998" VisibleName="NetShield" cssClass="fa fa-shield fa-fw">
+            <Dashboard VisibleName="Dashboard" url="/ui/netshield/index/dashboard" order="1"/>
+            <Devices VisibleName="Devices" url="/ui/netshield/index/devices" order="2"/>
+            <Alerts VisibleName="Alerts" url="/ui/netshield/index/alerts" order="3"/>
+            <Sessions VisibleName="Sessions" url="/ui/netshield/index/sessions" order="4"/>
+            <!-- IDS/IPS hidden: handled by NetGuardian plugin -->
+            <!-- <Ids VisibleName="IDS/IPS" url="/ui/netshield/index/ids" order="4.5"/> -->
+            <WebCategories VisibleName="Web Categories" url="/ui/netshield/index/webcategories" order="5"/>
+            <TargetLists VisibleName="Target Lists" url="/ui/netshield/index/targetlists" order="6"/>
+            <AppSignatures VisibleName="App Signatures" url="/ui/netshield/index/appsignatures" order="7"/>
+            <Dns VisibleName="DNS Filter" url="/ui/netshield/index/dns" order="8"/>
+            <Bandwidth VisibleName="Bandwidth" url="/ui/netshield/index/bandwidth" order="9"/>
+            <Policies VisibleName="Policies" url="/ui/netshield/index/policies" order="10"/>
+            <!-- <Parental VisibleName="Parental Controls" url="/ui/netshield/index/parental" order="11"/> -->
+            <Threats VisibleName="Threat Intel" url="/ui/netshield/index/threats" order="12"/>
+            <Geoip VisibleName="GeoIP Blocking" url="/ui/netshield/index/geoip" order="13"/>
+            <Network VisibleName="Network" url="/ui/netshield/index/network" order="14"/>
+            <Scanner VisibleName="Scanner" url="/ui/netshield/index/scanner" order="15"/>
+            <FusionVpn VisibleName="Fusion VPN" url="/ui/netshield/index/fusionvpn" order="16"/>
+            <Settings VisibleName="Settings" url="/ui/netshield/index/settings" order="17"/>
+        </NetShield>
+    </Services>
+</menu>

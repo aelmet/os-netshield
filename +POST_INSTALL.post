@@ -1,0 +1,26 @@
+#!/bin/sh
+
+# Detect OPNsense version
+OPNSENSE_VER=$(opnsense-version -v 2>/dev/null || echo "0.0")
+echo "NetShield: installing on OPNsense $OPNSENSE_VER"
+
+# Install Python dependencies if requirements.txt exists
+REQFILE="/usr/local/opnsense/scripts/netshield/requirements.txt"
+if [ -f "$REQFILE" ]; then
+    /usr/local/bin/python3 -m pip install -r "$REQFILE" --break-system-packages 2>/dev/null || \
+    /usr/local/bin/python3 -m pip install -r "$REQFILE" 2>/dev/null || \
+    echo "NetShield: Warning: could not install Python dependencies."
+fi
+
+# Initialize the database directory
+mkdir -p /var/db/netshield
+chmod 750 /var/db/netshield
+
+# Restart configd to pick up new actions
+service configd restart
+
+# Generate initial config from templates
+configctl template reload OPNsense/NetShield 2>/dev/null || true
+
+echo "NetShield: installation complete."
+exit 0

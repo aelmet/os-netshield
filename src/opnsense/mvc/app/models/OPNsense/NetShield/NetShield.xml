@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<!--
+    Copyright (C) 2025 NetShield
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+-->
+<model>
+    <mount>//OPNsense/netshield</mount>
+    <version>1.0.0</version>
+    <description>NetShield — Advanced network security and monitoring</description>
+    <items>
+        <general>
+            <enabled type="BooleanField">
+                <Default>1</Default>
+            </enabled>
+            <telegram_bot_token type="TextField">
+                <Required>Y</Required>
+            </telegram_bot_token>
+            <telegram_chat_id type="TextField">
+                <Required>Y</Required>
+            </telegram_chat_id>
+            <dpi_enabled type="BooleanField">
+                <Default>1</Default>
+            </dpi_enabled>
+            <dns_filtering_enabled type="BooleanField">
+                <Default>1</Default>
+            </dns_filtering_enabled>
+            <device_tracking_enabled type="BooleanField">
+                <Default>1</Default>
+            </device_tracking_enabled>
+            <threat_intel_enabled type="BooleanField">
+                <Default>1</Default>
+            </threat_intel_enabled>
+            <alert_cooldown type="IntegerField">
+                <Default>15</Default>
+                <MinimumValue>1</MinimumValue>
+                <MaximumValue>1440</MaximumValue>
+            </alert_cooldown>
+            <check_interval type="IntegerField">
+                <Default>30</Default>
+                <MinimumValue>10</MinimumValue>
+                <MaximumValue>300</MaximumValue>
+            </check_interval>
+            <excluded_devices type="CSVListField"/>
+            <new_device_alert type="BooleanField">
+                <Default>1</Default>
+            </new_device_alert>
+            <auto_quarantine_unknown type="BooleanField">
+                <Default>0</Default>
+            </auto_quarantine_unknown>
+            <log_level type="OptionField">
+                <Default>INFO</Default>
+                <OptionValues>
+                    <INFO>INFO</INFO>
+                    <DEBUG>DEBUG</DEBUG>
+                    <WARNING>WARNING</WARNING>
+                    <ERROR>ERROR</ERROR>
+                </OptionValues>
+            </log_level>
+            <syslog_enabled type="BooleanField">
+                <Default>0</Default>
+                <Required>N</Required>
+            </syslog_enabled>
+            <syslog_host type="TextField">
+                <Default></Default>
+                <Required>N</Required>
+            </syslog_host>
+            <syslog_port type="IntegerField">
+                <Default>514</Default>
+                <MinimumValue>1</MinimumValue>
+                <MaximumValue>65535</MaximumValue>
+                <Required>N</Required>
+            </syslog_port>
+            <syslog_protocol type="OptionField">
+                <Default>udp</Default>
+                <OptionValues>
+                    <udp>UDP</udp>
+                    <tcp>TCP</tcp>
+                </OptionValues>
+                <Required>N</Required>
+            </syslog_protocol>
+        </general>
+    </items>
+</model>

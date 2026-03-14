@@ -1,0 +1,17 @@
+NetShield provides real-time network security monitoring, DNS filtering,
+device management, traffic inspection, and threat intelligence for OPNsense.
+
+Features:
+- Deep packet inspection and application identification
+- DNS-based content filtering with category and parental controls
+- GeoIP-based traffic blocking
+- Device tracking and quarantine enforcement
+- Behavioral IDS with threat feed integration
+- Multi-VPN profile management (Fusion VPN)
+- Mobile JWT API for remote monitoring
+- Tor exit node auto-blocking
+- Web category filtering
+- Real-time bandwidth and session monitoring
+- Telegram alert notifications
+
+WWW: https://github.com/netshield-project/os-netshield
