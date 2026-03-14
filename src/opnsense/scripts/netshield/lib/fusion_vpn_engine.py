@@ -13,9 +13,11 @@ Provides Asus VPN Fusion-style functionality:
 - Multiple simultaneous VPN connections
 """
 
+import ipaddress
 import json
 import logging
 import os
+import re
 import sqlite3
 import subprocess
 import time
@@ -29,6 +31,10 @@ FUSION_DB = "/var/netshield/fusion_vpn.db"
 OVPN_CONFIG_DIR = "/var/etc/openvpn-fusion"
 WG_CONFIG_DIR = "/var/etc/wireguard-fusion"
 PF_ANCHOR = "netshield_fusion_vpn"
+PF_ANCHOR_FILE = "/var/etc/netshield_fusion_vpn.rules"
+OPENVPN_BIN = "/usr/local/sbin/openvpn"
+WG_BIN = "/usr/local/bin/wg"
+RESOLV_BACKUP = "/var/etc/resolv.conf.fusion.bak"
 
 
 @dataclass
@@ -210,7 +216,7 @@ class FusionVpnEngine:
             protocol=row["protocol"],
             config_file=row["config_file"],
             username=row["username"],
-            password=row["password"],
+            password="***" if row["password"] else None,  # Mask password
             enabled=bool(row["enabled"]),
             apply_to_all=bool(row["apply_to_all"]),
             kill_switch=bool(row["kill_switch"]),
@@ -221,6 +227,25 @@ class FusionVpnEngine:
             connected_since=row["connected_since"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+        )
+
+    def _get_profile_raw(self, profile_id: int) -> Optional[VpnProfile]:
+        """Get profile with real password (for internal connect operations only)."""
+        conn = self._get_conn()
+        cursor = conn.execute("SELECT * FROM vpn_profiles WHERE id = ?", (profile_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return None
+        return VpnProfile(
+            id=row["id"], name=row["name"], protocol=row["protocol"],
+            config_file=row["config_file"], username=row["username"],
+            password=row["password"],  # Real password for auth
+            enabled=bool(row["enabled"]), apply_to_all=bool(row["apply_to_all"]),
+            kill_switch=bool(row["kill_switch"]), status=row["status"],
+            interface=row["interface"], bytes_in=row["bytes_in"] or 0,
+            bytes_out=row["bytes_out"] or 0, connected_since=row["connected_since"],
+            created_at=row["created_at"], updated_at=row["updated_at"],
         )
 
     def create_profile(self, name: str, protocol: str, config_content: str,
@@ -300,12 +325,18 @@ class FusionVpnEngine:
 
     def connect_profile(self, profile_id: int) -> dict:
         """Connect a VPN profile."""
-        profile = self.get_profile(profile_id)
+        profile = self._get_profile_raw(profile_id)  # Need real password
         if not profile:
             return {"status": "error", "message": "Profile not found"}
 
         if profile.status == "connected":
             return {"status": "ok", "message": "Already connected"}
+
+        # Check binary availability
+        if profile.protocol == "openvpn" and not os.path.exists(OPENVPN_BIN):
+            return {"status": "error", "message": f"OpenVPN not found at {OPENVPN_BIN}. Install: pkg install openvpn"}
+        if profile.protocol == "wireguard" and not os.path.exists(WG_BIN):
+            return {"status": "error", "message": f"WireGuard tools not found at {WG_BIN}. Install: pkg install wireguard-tools"}
 
         # Update status to connecting
         conn = self._get_conn()
@@ -387,22 +418,39 @@ class FusionVpnEngine:
         # Build command
         interface = f"tun_fusion{profile.id}"
         cmd = [
-            "openvpn",
+            OPENVPN_BIN,
             "--config", profile.config_file,
             "--dev", interface,
+            "--dev-type", "tun",
             "--daemon", f"fusion_vpn_{profile.id}",
             "--writepid", f"/var/run/openvpn_fusion_{profile.id}.pid",
             "--status", f"/var/etc/openvpn-fusion/{profile.name}.status", "30",
+            "--log-append", f"/var/log/openvpn_fusion_{profile.id}.log",
         ]
         if auth_file:
             cmd.extend(["--auth-user-pass", auth_file])
 
+        log_file = f"/var/log/openvpn_fusion_{profile.id}.log"
         try:
-            subprocess.run(cmd, check=True, capture_output=True, timeout=30)
-            time.sleep(3)  # Wait for connection
+            result = subprocess.run(cmd, capture_output=True, timeout=30)
+            time.sleep(3)  # Wait for connection to establish
+
+            # Check if process actually started
+            pid_file = f"/var/run/openvpn_fusion_{profile.id}.pid"
+            if result.returncode != 0 or not os.path.exists(pid_file):
+                # Read log for real error
+                err_msg = result.stderr.decode().strip() if result.stderr else ""
+                if not err_msg and os.path.exists(log_file):
+                    with open(log_file) as f:
+                        lines = f.readlines()
+                        err_msg = lines[-1].strip() if lines else "Unknown error"
+                return {"status": "error", "message": f"OpenVPN failed: {err_msg}"}
+
             return {"status": "ok", "interface": interface}
-        except subprocess.CalledProcessError as e:
-            return {"status": "error", "message": f"OpenVPN failed: {e.stderr.decode()}"}
+        except subprocess.TimeoutExpired:
+            return {"status": "error", "message": "OpenVPN connection timed out (30s)"}
+        except Exception as e:
+            return {"status": "error", "message": f"OpenVPN error: {str(e)}"}
 
     def _disconnect_openvpn(self, profile: VpnProfile):
         """Stop OpenVPN connection."""
@@ -442,7 +490,7 @@ class FusionVpnEngine:
             self._write_wg_stripped_config(wg_conf, wg_only_conf)
 
             # Apply WireGuard config
-            subprocess.run(["wg", "setconf", interface, wg_only_conf], check=True, capture_output=True, timeout=10)
+            subprocess.run([WG_BIN, "setconf", interface, wg_only_conf], check=True, capture_output=True, timeout=10)
 
             # Set interface address
             if wg_conf.get("address"):
@@ -629,17 +677,118 @@ class FusionVpnEngine:
 
     # ========== Routing & Firewall ==========
 
-    def _apply_routing_rules(self):
-        """Apply pf routing rules for VPN policy routing."""
-        # This would generate pf anchor rules for:
-        # 1. Devices assigned to specific VPNs
-        # 2. Exception devices (bypass VPN)
-        # 3. Kill switch (block if VPN down)
-        # Implementation depends on OPNsense pf configuration
+    def _mac_to_ip(self, mac: str) -> Optional[str]:
+        """Resolve MAC address to IP via ARP table."""
         try:
-            subprocess.run(["configctl", "filter", "reload"], capture_output=True, timeout=30)
+            r = subprocess.run(["arp", "-an"], capture_output=True, text=True, timeout=5)
+            # Format: ? (192.168.1.10) at aa:bb:cc:dd:ee:ff on em0
+            for line in r.stdout.splitlines():
+                if mac.lower() in line.lower():
+                    m = re.search(r'\((\d+\.\d+\.\d+\.\d+)\)', line)
+                    if m:
+                        return m.group(1)
         except Exception:
             pass
+        return None
+
+    def _apply_routing_rules(self):
+        """Generate and load PF anchor rules for per-device VPN routing.
+
+        Rules logic:
+        1. Exception devices → pass out on WAN gateway (skip VPN)
+        2. Assigned devices → route-to VPN interface
+        3. apply_to_all profiles → all LAN traffic routes through VPN
+        4. Kill switch → block traffic if VPN interface is down
+        """
+        rules = []
+        rules.append("# NetShield Fusion VPN routing rules")
+        rules.append(f"# Generated {datetime.now().isoformat()}")
+        rules.append("")
+
+        conn = self._get_conn()
+
+        # Get connected profiles with interfaces
+        profiles = {}
+        for row in conn.execute(
+            "SELECT * FROM vpn_profiles WHERE status = 'connected' AND interface IS NOT NULL"
+        ):
+            profiles[row["id"]] = dict(row)
+
+        if not profiles:
+            # No connected VPNs — flush anchor and return
+            conn.close()
+            self._load_pf_rules("")
+            return
+
+        # 1. Exception devices — always bypass VPN
+        exception_ips = []
+        for row in conn.execute("SELECT device_mac FROM exception_devices"):
+            ip = self._mac_to_ip(row["device_mac"])
+            if ip:
+                exception_ips.append(ip)
+
+        if exception_ips:
+            rules.append("# Exception devices — bypass VPN")
+            for ip in exception_ips:
+                rules.append(f"pass out quick on egress from {ip} to any")
+            rules.append("")
+
+        # 2. Per-device assignments — route specific devices through specific VPNs
+        rules.append("# Per-device VPN assignments")
+        for row in conn.execute("""
+            SELECT da.device_mac, da.profile_id
+            FROM device_assignments da
+            WHERE da.enabled = 1
+        """):
+            pid = row["profile_id"]
+            if pid not in profiles:
+                continue
+            iface = profiles[pid]["interface"]
+            ip = self._mac_to_ip(row["device_mac"])
+            if ip and iface:
+                rules.append(f"pass out quick on {iface} route-to ({iface}) from {ip} to any")
+        rules.append("")
+
+        # 3. apply_to_all profiles — route all remaining LAN traffic
+        for pid, p in profiles.items():
+            if p["apply_to_all"] and p["interface"]:
+                iface = p["interface"]
+                rules.append(f"# Profile '{p['name']}' — route all traffic")
+                rules.append(f"pass out on {iface} route-to ({iface}) from any to any")
+
+                # 4. Kill switch — block if VPN down
+                if p["kill_switch"]:
+                    rules.append(f"# Kill switch for '{p['name']}'")
+                    rules.append(f"block drop out quick on egress from any to any")
+
+        conn.close()
+
+        rule_text = "\n".join(rules) + "\n"
+        self._load_pf_rules(rule_text)
+
+    def _load_pf_rules(self, rule_text: str):
+        """Write rules to file and load into PF anchor."""
+        try:
+            os.makedirs(os.path.dirname(PF_ANCHOR_FILE), exist_ok=True)
+            with open(PF_ANCHOR_FILE, "w") as f:
+                f.write(rule_text)
+
+            if rule_text.strip():
+                # Load rules into the anchor
+                subprocess.run(
+                    ["pfctl", "-a", PF_ANCHOR, "-f", PF_ANCHOR_FILE],
+                    capture_output=True, timeout=10
+                )
+                log.info("Fusion VPN PF rules loaded into anchor %s", PF_ANCHOR)
+            else:
+                # Flush the anchor
+                subprocess.run(
+                    ["pfctl", "-a", PF_ANCHOR, "-F", "rules"],
+                    capture_output=True, timeout=10
+                )
+                log.info("Fusion VPN PF anchor flushed (no connected profiles)")
+        except Exception as e:
+            log.error("Failed to load PF rules: %s", e)
 
 
     def _parse_wg_config(self, config_file):
@@ -726,16 +875,56 @@ class FusionVpnEngine:
         return ""
 
     def _set_wg_dns(self, dns_str, interface):
-        """Set DNS servers for WireGuard tunnel."""
+        """Configure DNS forwarding for WireGuard tunnel via Unbound."""
         dns_servers = [d.strip() for d in dns_str.split(",") if d.strip()]
         if not dns_servers:
             return
-        # On OPNsense, DNS is managed by Unbound - just log for now
-        pass
+
+        # On OPNsense, Unbound handles DNS. Add forward-zone for tunnel DNS.
+        fwd_conf = "/var/unbound/forward-fusion.conf"
+        try:
+            # Backup existing resolv.conf
+            if os.path.exists("/etc/resolv.conf") and not os.path.exists(RESOLV_BACKUP):
+                with open("/etc/resolv.conf") as f:
+                    with open(RESOLV_BACKUP, "w") as bak:
+                        bak.write(f.read())
+
+            # Write Unbound forward config for all zones through VPN DNS
+            lines = ["# Fusion VPN DNS forwarding\n", "forward-zone:\n", '    name: "."\n']
+            for dns in dns_servers:
+                lines.append(f"    forward-addr: {dns}\n")
+            with open(fwd_conf, "w") as f:
+                f.writelines(lines)
+
+            # Reload Unbound to pick up new forwards
+            subprocess.run(
+                ["configctl", "dns", "reload"],
+                capture_output=True, timeout=15
+            )
+            log.info("DNS forwarding set to %s via interface %s", dns_servers, interface)
+        except Exception as e:
+            log.error("Failed to set WireGuard DNS: %s", e)
 
     def _restore_dns(self):
-        """Restore DNS after WireGuard disconnect."""
-        pass
+        """Remove Fusion VPN DNS forwarding and restore defaults."""
+        fwd_conf = "/var/unbound/forward-fusion.conf"
+        try:
+            if os.path.exists(fwd_conf):
+                os.remove(fwd_conf)
+            # Restore original resolv.conf if we backed it up
+            if os.path.exists(RESOLV_BACKUP):
+                with open(RESOLV_BACKUP) as bak:
+                    with open("/etc/resolv.conf", "w") as f:
+                        f.write(bak.read())
+                os.remove(RESOLV_BACKUP)
+            # Reload Unbound
+            subprocess.run(
+                ["configctl", "dns", "reload"],
+                capture_output=True, timeout=15
+            )
+            log.info("DNS restored to defaults")
+        except Exception as e:
+            log.error("Failed to restore DNS: %s", e)
 
     # ========== Status & Stats ==========
 
@@ -797,7 +986,7 @@ class FusionVpnEngine:
         """Get WireGuard traffic stats."""
         try:
             result = subprocess.run(
-                ["wg", "show", f"wg{profile.id + 1}", "transfer"],
+                [WG_BIN, "show", f"wg{profile.id + 1}", "transfer"],
                 capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:

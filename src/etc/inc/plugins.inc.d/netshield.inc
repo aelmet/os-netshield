@@ -55,6 +55,8 @@ function netshield_firewall($fw)
 {
     // Register Tor blocking anchor (rules loaded by tor_blocker.py)
     $fw->registerAnchor('netshield_tor', 'fw');
+    // Register Fusion VPN routing anchor (rules loaded by fusion_vpn_engine.py)
+    $fw->registerAnchor('netshield_fusion_vpn', 'fw');
     // Get quarantined device IPs from helper script (safe, no user input)
     $output = array();
     $rc = 0;
