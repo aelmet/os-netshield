@@ -142,4 +142,10 @@ class IndexController extends \OPNsense\Base\IndexController
         $this->view->title = gettext('NetShield - Sessions');
         $this->view->pick('OPNsense/NetShield/sessions');
     }
+
+    public function torAction()
+    {
+        $this->view->title = gettext('NetShield - Tor Blocking');
+        $this->view->pick('OPNsense/NetShield/tor');
+    }
 }

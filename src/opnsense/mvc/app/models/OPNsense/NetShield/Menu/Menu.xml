@@ -40,6 +40,7 @@
             <Bandwidth VisibleName="Bandwidth" url="/ui/netshield/index/bandwidth" order="9"/>
             <Policies VisibleName="Policies" url="/ui/netshield/index/policies" order="10"/>
             <!-- <Parental VisibleName="Parental Controls" url="/ui/netshield/index/parental" order="11"/> -->
+            <TorBlocking VisibleName="Tor Blocking" url="/ui/netshield/index/tor" order="11" cssClass="fa fa-ban"/>
             <Threats VisibleName="Threat Intel" url="/ui/netshield/index/threats" order="12"/>
             <Geoip VisibleName="GeoIP Blocking" url="/ui/netshield/index/geoip" order="13"/>
             <Network VisibleName="Network" url="/ui/netshield/index/network" order="14"/>
