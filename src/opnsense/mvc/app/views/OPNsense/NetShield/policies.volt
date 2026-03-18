@@ -1552,7 +1552,7 @@ function loadAppsAndCategories(callback) {
 }
 
 function loadDevicesAndVlans() {
-    $.getJSON('/api/netshield/devices/search', function(data) {
+    $.getJSON('/api/netshield/devices/search?rowCount=1000&current=1', function(data) {
         devices = data.rows || [];
         renderDeviceGrid();
     });
