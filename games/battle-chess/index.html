@@ -1,0 +1,881 @@
+<title>Blade &amp; Crown</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#07080c; --panel:rgba(16,18,26,.84); --line:#4a3f24; --gold:#dcb54e; --gold-2:#f3d78a;
+  --text:#efe7d2; --muted:#a59c86; --blue:#5b7cff; --red:#ef4d69;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Alegreya Sans',system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden}
+#app{position:relative;height:100%;background:radial-gradient(ellipse at 50% 28%,#1c2132 0%,#0c0e15 55%,#06070a 100%)}
+#c{display:block;width:100%;height:100%;touch-action:none;cursor:pointer}
+.top{position:absolute;left:0;right:0;top:0;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;pointer-events:none}
+.brand h1{font-family:'Cinzel',Georgia,serif;font-weight:800;font-size:22px;letter-spacing:.08em;margin:0;color:var(--gold);text-shadow:0 2px 0 #000,0 0 18px rgba(220,181,78,.25)}
+.brand p{margin:2px 0 0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.status{pointer-events:auto;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-weight:700;font-size:15px}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--blue);box-shadow:0 0 10px currentColor}
+.caps{position:absolute;left:16px;top:74px;display:grid;gap:4px;pointer-events:none;font-size:13px;color:var(--muted)}
+.caprow{display:flex;align-items:center;gap:6px;min-height:22px}
+.caprow b{font-weight:500;min-width:74px}
+.glyphs{font-size:20px;line-height:1;letter-spacing:1px}
+.glyphs.red{color:var(--red)} .glyphs.blue{color:var(--blue)}
+.adv{color:var(--gold-2);font-weight:700;font-variant-numeric:tabular-nums}
+.dock{position:absolute;left:0;right:0;bottom:0;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;background:linear-gradient(to top,rgba(6,7,10,.9),rgba(6,7,10,0))}
+.btn,.field select{font:600 14px 'Alegreya Sans',system-ui,sans-serif;color:var(--text);background:#171a23;border:1px solid var(--line);border-radius:6px;padding:8px 12px;cursor:pointer}
+.btn:hover:not(:disabled),.field select:hover{border-color:var(--gold)}
+.btn:focus-visible,.field select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:linear-gradient(#e2bd5c,#b98f2c);color:#1a1405;border-color:#f0d27f}
+.btn.toggle[aria-pressed="false"]{color:var(--muted)}
+.field{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.hint{position:absolute;left:0;right:0;bottom:62px;margin:0;text-align:center;font-size:12px;color:var(--muted);pointer-events:none}
+.banner{position:absolute;left:0;right:0;top:38%;text-align:center;font-family:'Cinzel',Georgia,serif;font-weight:800;font-size:clamp(36px,9vw,76px);letter-spacing:.12em;color:var(--gold-2);text-shadow:0 4px 0 #000,0 0 30px rgba(243,215,138,.5);pointer-events:none;animation:pop 1.3s ease forwards}
+@keyframes pop{0%{opacity:0;transform:scale(.6)}15%{opacity:1;transform:scale(1.05)}25%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(1.08)}}
+.modal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,4,7,.6)}
+.card{background:#12141c;border:1px solid var(--gold);border-radius:10px;padding:22px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.card h2{font-family:'Cinzel',Georgia,serif;color:var(--gold);margin:0 0 8px;font-size:24px;text-wrap:balance}
+.card p{margin:0 0 16px;color:var(--muted)}
+.row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.promo .btn{font-size:26px;padding:6px 14px}
+@media (max-width:640px){.hint{display:none}.brand h1{font-size:18px}.caps{top:66px}.status{font-size:14px}}
+@media (prefers-reduced-motion:reduce){.banner{animation:none}}
+</style>
+
+<div id="app">
+  <canvas id="c" aria-label="3D chess board. Tap a piece, then a highlighted square."></canvas>
+  <header class="top">
+    <div class="brand"><h1>Blade &amp; Crown</h1><p>Every capture is a duel</p></div>
+    <div class="status" role="status" aria-live="polite"><span class="dot" id="dot"></span><span id="statusText">Blue to move</span></div>
+  </header>
+  <div class="caps">
+    <div class="caprow"><b>Blue took</b><span id="capW" class="glyphs red"></span><span id="advW" class="adv"></span></div>
+    <div class="caprow"><b>Red took</b><span id="capB" class="glyphs blue"></span><span id="advB" class="adv"></span></div>
+  </div>
+  <div id="banner" class="banner" hidden></div>
+  <p class="hint">Drag to turn the board · Scroll to zoom · Tap a piece, then a glowing square</p>
+  <nav class="dock" aria-label="Game controls">
+    <button id="newBtn" class="btn primary" type="button">New game</button>
+    <button id="undoBtn" class="btn" type="button">Undo</button>
+    <label class="field" for="modeSel">Opponent <select id="modeSel"><option value="ai">Computer</option><option value="pvp">Two players</option></select></label>
+    <label class="field" for="lvlSel">Level <select id="lvlSel"><option value="1">Squire</option><option value="2" selected>Knight</option><option value="4">Warlord</option></select></label>
+    <button id="battleBtn" class="btn toggle" type="button" aria-pressed="true">Battles on</button>
+    <button id="soundBtn" class="btn toggle" type="button" aria-pressed="true">Sound on</button>
+    <button id="viewBtn" class="btn" type="button">Reset view</button>
+  </nav>
+  <div id="promoModal" class="modal" hidden>
+    <div class="card promo" role="dialog" aria-labelledby="promoTitle">
+      <h2 id="promoTitle">Promote your pawn</h2>
+      <p>Choose what your soldier becomes.</p>
+      <div class="row">
+        <button class="btn" type="button" data-p="q" aria-label="Queen">♛</button>
+        <button class="btn" type="button" data-p="r" aria-label="Rook">♜</button>
+        <button class="btn" type="button" data-p="b" aria-label="Bishop">♝</button>
+        <button class="btn" type="button" data-p="n" aria-label="Knight">♞</button>
+      </div>
+    </div>
+  </div>
+  <div id="endModal" class="modal" hidden>
+    <div class="card" role="dialog" aria-labelledby="endTitle">
+      <h2 id="endTitle">Checkmate</h2>
+      <p id="endText"></p>
+      <div class="row">
+        <button id="endNew" class="btn primary" type="button">New game</button>
+        <button id="endClose" class="btn" type="button">View board</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const V3 = THREE.Vector3;
+
+/* =========================== CHESS ENGINE =========================== */
+const VAL = {p:100,n:320,b:330,r:500,q:900,k:0};
+let uid = 0;
+const F = s => s & 7, R = s => s >> 3;
+const on = (f,r) => f>=0 && f<8 && r>=0 && r<8;
+const KN = [[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]];
+const KG = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+const DIAG = [[1,1],[1,-1],[-1,1],[-1,-1]], ORTH = [[1,0],[-1,0],[0,1],[0,-1]];
+const other = c => c==='w' ? 'b' : 'w';
+
+function initialState(){
+  const b = new Array(64).fill(null);
+  const back = ['r','n','b','q','k','b','n','r'];
+  for (let f=0; f<8; f++){
+    b[f] = {t:back[f], c:'w', id:uid++};
+    b[8+f] = {t:'p', c:'w', id:uid++};
+    b[48+f] = {t:'p', c:'b', id:uid++};
+    b[56+f] = {t:back[f], c:'b', id:uid++};
+  }
+  return {b, turn:'w', castle:{wK:true,wQ:true,bK:true,bQ:true}, ep:-1, half:0, caps:{w:[],b:[]}};
+}
+
+function attacked(b, sq, by){
+  const f = F(sq), r = R(sq);
+  const dr = by==='w' ? -1 : 1;
+  for (const df of [-1,1]){ const ff=f+df, rr=r+dr; if (on(ff,rr)){ const p=b[rr*8+ff]; if (p && p.c===by && p.t==='p') return true; } }
+  for (const [df,d2] of KN){ const ff=f+df, rr=r+d2; if (on(ff,rr)){ const p=b[rr*8+ff]; if (p && p.c===by && p.t==='n') return true; } }
+  for (const [df,d2] of KG){ const ff=f+df, rr=r+d2; if (on(ff,rr)){ const p=b[rr*8+ff]; if (p && p.c===by && p.t==='k') return true; } }
+  for (const [df,d2] of DIAG){ let ff=f+df, rr=r+d2; while (on(ff,rr)){ const p=b[rr*8+ff]; if (p){ if (p.c===by && (p.t==='b'||p.t==='q')) return true; break; } ff+=df; rr+=d2; } }
+  for (const [df,d2] of ORTH){ let ff=f+df, rr=r+d2; while (on(ff,rr)){ const p=b[rr*8+ff]; if (p){ if (p.c===by && (p.t==='r'||p.t==='q')) return true; break; } ff+=df; rr+=d2; } }
+  return false;
+}
+function kingSq(b,c){ for (let i=0;i<64;i++){ const p=b[i]; if (p && p.t==='k' && p.c===c) return i; } return -1; }
+function inCheck(s,c){ return attacked(s.b, kingSq(s.b,c), other(c)); }
+
+function pseudo(s){
+  const b = s.b, c = s.turn, opp = other(c), out = [];
+  const pawnPush = (from,to,cap) => {
+    if (R(to)===7 || R(to)===0){ for (const pr of ['q','r','b','n']) out.push({from,to,cap,promo:pr}); }
+    else out.push({from,to,cap});
+  };
+  for (let sq=0; sq<64; sq++){
+    const p = b[sq]; if (!p || p.c!==c) continue;
+    const f = F(sq), r = R(sq);
+    if (p.t==='p'){
+      const dir = c==='w' ? 1 : -1, start = c==='w' ? 1 : 6, r1 = r+dir;
+      if (on(f,r1) && !b[r1*8+f]){
+        pawnPush(sq, r1*8+f, -1);
+        const r2 = r+2*dir;
+        if (r===start && !b[r2*8+f]) out.push({from:sq, to:r2*8+f, cap:-1, dbl:true});
+      }
+      for (const df of [-1,1]){
+        const ff = f+df; if (!on(ff,r1)) continue;
+        const t = r1*8+ff, q = b[t];
+        if (q && q.c===opp) pawnPush(sq, t, t);
+        else if (!q && t===s.ep) out.push({from:sq, to:t, cap:r*8+ff, ep:true});
+      }
+    } else if (p.t==='n' || p.t==='k'){
+      for (const [df,d2] of (p.t==='n'?KN:KG)){
+        const ff=f+df, rr=r+d2; if (!on(ff,rr)) continue;
+        const t = rr*8+ff, q = b[t];
+        if (!q) out.push({from:sq,to:t,cap:-1}); else if (q.c===opp) out.push({from:sq,to:t,cap:t});
+      }
+      if (p.t==='k'){
+        const base = c==='w' ? 0 : 56, K = c+'K', Q = c+'Q';
+        if (sq===base+4 && !attacked(b,sq,opp)){
+          const rk = b[base+7], rq = b[base];
+          if (s.castle[K] && rk && rk.t==='r' && rk.c===c && !b[base+5] && !b[base+6] && !attacked(b,base+5,opp) && !attacked(b,base+6,opp))
+            out.push({from:sq,to:base+6,cap:-1,castle:'K'});
+          if (s.castle[Q] && rq && rq.t==='r' && rq.c===c && !b[base+1] && !b[base+2] && !b[base+3] && !attacked(b,base+3,opp) && !attacked(b,base+2,opp))
+            out.push({from:sq,to:base+2,cap:-1,castle:'Q'});
+        }
+      }
+    } else {
+      const dirs = p.t==='b' ? DIAG : p.t==='r' ? ORTH : DIAG.concat(ORTH);
+      for (const [df,d2] of dirs){
+        let ff=f+df, rr=r+d2;
+        while (on(ff,rr)){
+          const t = rr*8+ff, q = b[t];
+          if (!q) out.push({from:sq,to:t,cap:-1});
+          else { if (q.c===opp) out.push({from:sq,to:t,cap:t}); break; }
+          ff+=df; rr+=d2;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function make(s,m){
+  const b = s.b.slice(), p = b[m.from];
+  const castle = Object.assign({}, s.castle);
+  let caps = s.caps;
+  if (m.cap>=0){ caps = {w:s.caps.w, b:s.caps.b}; caps[p.c] = s.caps[p.c].concat(b[m.cap].t); b[m.cap] = null; }
+  b[m.from] = null;
+  b[m.to] = m.promo ? {t:m.promo, c:p.c, id:p.id} : p;
+  if (m.castle){
+    const base = p.c==='w' ? 0 : 56;
+    if (m.castle==='K'){ b[base+5]=b[base+7]; b[base+7]=null; } else { b[base+3]=b[base]; b[base]=null; }
+  }
+  if (p.t==='k'){ castle[p.c+'K']=false; castle[p.c+'Q']=false; }
+  for (const sq of [m.from,m.to]){
+    if (sq===0) castle.wQ=false; if (sq===7) castle.wK=false;
+    if (sq===56) castle.bQ=false; if (sq===63) castle.bK=false;
+  }
+  return {b, turn:other(s.turn), castle, ep: m.dbl ? (m.from+m.to)/2 : -1,
+          half: (p.t==='p' || m.cap>=0) ? 0 : s.half+1, caps};
+}
+function legal(s){ return pseudo(s).filter(m => !inCheck(make(s,m), s.turn)); }
+
+function insufficient(b){
+  const rest = b.filter(p => p && p.t!=='k');
+  return rest.length===0 || (rest.length===1 && (rest[0].t==='n' || rest[0].t==='b'));
+}
+
+/* ---- AI: negamax with alpha-beta ---- */
+function evalBoard(b){
+  let s = 0;
+  for (let i=0;i<64;i++){
+    const p = b[i]; if (!p) continue;
+    const f=F(i), r=R(i), cen=(3.5-Math.abs(f-3.5))+(3.5-Math.abs(r-3.5));
+    let v = VAL[p.t];
+    if (p.t==='n'||p.t==='b') v += cen*6;
+    else if (p.t==='p') v += (p.c==='w' ? r-1 : 6-r)*8 + (f>=2&&f<=5 ? cen*3 : 0);
+    else if (p.t==='q') v += cen*2;
+    else if (p.t==='k') v -= cen*4;
+    s += p.c==='w' ? v : -v;
+  }
+  return s;
+}
+function order(s,ms){
+  return ms.map(m => ({m, sc: m.cap>=0 ? 10*VAL[s.b[m.cap].t]-VAL[s.b[m.from].t] : (m.promo ? VAL[m.promo] : 0)}))
+           .sort((a,b)=>b.sc-a.sc).map(x=>x.m);
+}
+function negamax(s,d,a,beta){
+  if (d===0) return (s.turn==='w'?1:-1)*evalBoard(s.b);
+  const ms = legal(s);
+  if (!ms.length) return inCheck(s,s.turn) ? -(100000+d) : 0;
+  let best = -Infinity;
+  for (const m of order(s,ms)){
+    const v = -negamax(make(s,m), d-1, -beta, -a);
+    if (v>best) best=v; if (v>a) a=v; if (a>=beta) break;
+  }
+  return best;
+}
+function bestMove(s,depth){
+  let best=null, bv=-Infinity, a=-Infinity;
+  for (const m of order(s,legal(s))){
+    const v = -negamax(make(s,m), depth-1, -Infinity, -a) + Math.random()*8;
+    if (v>bv){ bv=v; best=m; } if (v>a) a=v;
+  }
+  return best;
+}
+
+/* =========================== SOUND =========================== */
+let AC = null, soundOn = true;
+function ac(){
+  if (!AC){ try { AC = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){ return null; } }
+  if (AC.state==='suspended') AC.resume();
+  return AC;
+}
+const sfx = {
+  o(type,f0,f1,dur,g0){ const a=soundOn&&ac(); if(!a) return; const t=a.currentTime, o=a.createOscillator(), g=a.createGain();
+    o.type=type; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(Math.max(1,f1),t+dur);
+    g.gain.setValueAtTime(g0,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.connect(g).connect(a.destination); o.start(t); o.stop(t+dur+.02); },
+  n(dur,f0,f1,g0,type='bandpass',q=1){ const a=soundOn&&ac(); if(!a) return; const t=a.currentTime, len=Math.floor(a.sampleRate*dur);
+    const buf=a.createBuffer(1,len,a.sampleRate), d=buf.getChannelData(0); for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+    const s=a.createBufferSource(); s.buffer=buf; const fl=a.createBiquadFilter(); fl.type=type; fl.Q.value=q;
+    fl.frequency.setValueAtTime(f0,t); fl.frequency.exponentialRampToValueAtTime(f1,t+dur);
+    const g=a.createGain(); g.gain.setValueAtTime(g0,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    s.connect(fl).connect(g).connect(a.destination); s.start(t); },
+  clang(){ this.n(.08,3000,5000,.4,'highpass'); this.o('square',1800,1500,.3,.05); this.o('sine',2700,2600,.5,.08); },
+  whoosh(){ this.n(.22,500,2200,.28,'bandpass',.8); },
+  thud(){ this.o('sine',140,40,.35,.5); this.n(.25,600,100,.35,'lowpass'); },
+  crush(){ this.o('sine',90,30,.6,.7); this.n(.6,400,60,.5,'lowpass'); },
+  zap(){ this.o('sawtooth',1200,90,.45,.12); this.n(.3,4000,800,.15,'bandpass',2); },
+  charge(){ this.o('sine',200,900,.4,.08); },
+  step(){ this.n(.06,900,300,.12,'lowpass'); },
+  select(){ this.o('triangle',660,880,.12,.07); },
+  check(){ this.o('triangle',523,523,.18,.12); setTimeout(()=>this.o('triangle',784,784,.3,.12),150); },
+};
+
+/* =========================== SCENE =========================== */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+renderer.setClearColor(0x000000, 0);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x07080c, 30, 70);
+const camera = new THREE.PerspectiveCamera(42, 1, .1, 120);
+
+scene.add(new THREE.HemisphereLight(0xc8d6ff, 0x3a2c1c, .8));
+const sun = new THREE.DirectionalLight(0xfff0d0, 1.05);
+sun.position.set(5,12,6); sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera, {left:-7,right:7,top:7,bottom:-7,near:1,far:32});
+sun.shadow.bias = -.0005;
+scene.add(sun);
+const rim = new THREE.PointLight(0x6f8cff, .6, 30); rim.position.set(-6,5,-7); scene.add(rim);
+const fxLight = new THREE.PointLight(0xffffff, 0, 6); scene.add(fxLight);
+
+function rng(seed){ return () => { seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function marble(base, blots, vein, seed){
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d'), r = rng(seed);
+  g.fillStyle = base; g.fillRect(0,0,256,256);
+  for (let i=0;i<16;i++){ const x=r()*256, y=r()*256, rad=30+r()*90, gr=g.createRadialGradient(x,y,0,x,y,rad);
+    gr.addColorStop(0, blots[i%blots.length]); gr.addColorStop(1,'rgba(0,0,0,0)'); g.fillStyle=gr; g.fillRect(0,0,256,256); }
+  g.strokeStyle = vein;
+  for (let i=0;i<7;i++){ g.lineWidth=.6+r()*2.2; g.beginPath(); let x=r()*256, y=-10; g.moveTo(x,y);
+    while (y<266){ x+=(r()-.5)*40; y+=10+r()*22; g.lineTo(x,y); } g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.center.set(.5,.5); t.rotation = r()*Math.PI; t.anisotropy = 4;
+  return t;
+}
+const lightTex = [0,1,2,3].map(i => marble('#bdb54a', ['rgba(240,235,150,.4)','rgba(85,95,25,.35)'], 'rgba(70,80,25,.55)', 11+i));
+const darkTex  = [0,1,2,3].map(i => marble('#15180f', ['rgba(80,92,60,.35)','rgba(0,0,0,.55)'], 'rgba(160,170,125,.3)', 51+i));
+
+const sqPos = sq => new V3(F(sq)-3.5, 0, 3.5-R(sq));
+const boardGroup = new THREE.Group(); scene.add(boardGroup);
+const sqGeo = new THREE.BoxGeometry(1,.12,1);
+for (let sq=0; sq<64; sq++){
+  const lightSq = (F(sq)+R(sq))%2===1, k = (F(sq)*3+R(sq)*5)%4;
+  const m = new THREE.Mesh(sqGeo, new THREE.MeshStandardMaterial({map:(lightSq?lightTex:darkTex)[k], roughness:.3, metalness:.05}));
+  const p = sqPos(sq); m.position.set(p.x,-.06,p.z); m.receiveShadow = true; m.userData.sq = sq; boardGroup.add(m);
+}
+const frame = new THREE.Mesh(new THREE.BoxGeometry(9,.4,9), new THREE.MeshStandardMaterial({color:0x231d14, roughness:.85}));
+frame.position.y = -.24; frame.receiveShadow = true; boardGroup.add(frame);
+const rimTrim = new THREE.Mesh(new THREE.BoxGeometry(8.14,.06,8.14), new THREE.MeshStandardMaterial({color:0xb8922f, roughness:.35, metalness:.7}));
+rimTrim.position.y = -.04; boardGroup.add(rimTrim);
+function labelTex(txt){
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#dcb54e'; g.font = 'bold 40px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt,32,34);
+  return new THREE.CanvasTexture(c);
+}
+const lblGeo = new THREE.PlaneGeometry(.36,.36);
+for (let i=0;i<8;i++){
+  const a = new THREE.Mesh(lblGeo, new THREE.MeshBasicMaterial({map:labelTex('abcdefgh'[i]), transparent:true, depthWrite:false}));
+  a.rotation.x = -Math.PI/2; a.position.set(i-3.5,-.035,4.26); boardGroup.add(a);
+  const n = new THREE.Mesh(lblGeo, new THREE.MeshBasicMaterial({map:labelTex(String(i+1)), transparent:true, depthWrite:false}));
+  n.rotation.x = -Math.PI/2; n.position.set(-4.26,-.035,3.5-i); boardGroup.add(n);
+}
+const ground = new THREE.Mesh(new THREE.CircleGeometry(26,48), new THREE.MeshStandardMaterial({color:0x0e1017, roughness:1}));
+ground.rotation.x = -Math.PI/2; ground.position.y = -.44; ground.receiveShadow = true; scene.add(ground);
+
+/* ---- markers ---- */
+const markGroup = new THREE.Group(); scene.add(markGroup);
+const bm = (color,opacity) => new THREE.MeshBasicMaterial({color, transparent:true, opacity, depthWrite:false});
+const moveMat = bm(0xf3d36b,.6), capMat = bm(0xff4d5e,.75), selMat = bm(0xf3d36b,.35), lastMat = bm(0x6fd3ff,.2), checkMat = bm(0xff2a3a,.45);
+const circG = new THREE.CircleGeometry(.16,24), ringG = new THREE.RingGeometry(.36,.46,32), planeG = new THREE.PlaneGeometry(.96,.96);
+function flat(g,m,sq,y){ const x=new THREE.Mesh(g,m); x.rotation.x=-Math.PI/2; const p=sqPos(sq); x.position.set(p.x,y,p.z); markGroup.add(x); }
+
+/* =========================== PIECES =========================== */
+const SIDE = {
+  w:{robe:0x2e4fd6, dark:0x1a2a78, stone:0x8190b0, horse:0xeae6dc, glow:0x8fc0ff},
+  b:{robe:0xc8284c, dark:0x6c0f25, stone:0xa98282, horse:0x4b3526, glow:0xff8a6a},
+};
+const mat = (color,o={}) => new THREE.MeshStandardMaterial({color, roughness:o.r??.6, metalness:o.m??.05, emissive:o.e??0x000000, emissiveIntensity:o.ei??1, side:o.side??THREE.FrontSide});
+const mk = (g,m) => new THREE.Mesh(g,m);
+const sph = (r,m) => mk(new THREE.SphereGeometry(r,16,12),m);
+const hemi = (r,m) => mk(new THREE.SphereGeometry(r,16,8,0,Math.PI*2,0,Math.PI/2),m);
+const cyl = (rt,rb,h,m,seg=16,open=false) => mk(new THREE.CylinderGeometry(rt,rb,h,seg,1,open),m);
+const box = (w,h,d,m) => mk(new THREE.BoxGeometry(w,h,d),m);
+const cone = (r,h,m,seg=12) => mk(new THREE.ConeGeometry(r,h,seg),m);
+const torus = (r,t,m,arc=Math.PI*2) => mk(new THREE.TorusGeometry(r,t,8,24,arc),m);
+const lathe = (pts,m) => mk(new THREE.LatheGeometry(pts.map(([x,y])=>new THREE.Vector2(x,y)),24),m);
+
+function build(t,c){
+  const S = SIDE[c];
+  const g = new THREE.Group(), body = new THREE.Group(), arm = new THREE.Group();
+  g.add(body); body.add(arm);
+  const U = {body, arm, h:1, type:t, color:c};
+  const robe=mat(S.robe), dark=mat(S.dark), gold=mat(0xe8bb45,{r:.4,m:.4}), skin=mat(0xf0c8a0,{r:.8}),
+        steel=mat(0xd4dae4,{r:.35,m:.4}), wood=mat(0x6b4526,{r:.9}), white=mat(0xf1ece0,{r:.9});
+  const add = (m,x=0,y=0,z=0,p=body) => { m.position.set(x,y,z); p.add(m); return m; };
+  const flatRing = m => { m.rotation.x = Math.PI/2; return m; };
+  switch (t){
+    case 'p': {
+      add(lathe([[0,0],[.25,0],[.25,.05],[.19,.1],[.16,.32],[.12,.48],[.09,.54],[0,.56]],robe));
+      flatRing(add(torus(.155,.022,gold),0,.3,0));
+      add(sph(.1,skin),0,.65,0);
+      add(hemi(.112,steel),0,.66,0);
+      add(cyl(.13,.13,.012,steel),0,.66,0);
+      arm.position.set(.2,.42,.05);
+      add(cyl(.016,.016,.95,wood,8),0,.22,0,arm);
+      add(cone(.04,.13,steel),0,.76,0,arm);
+      flatRing(add(cyl(.14,.14,.03,dark,20),-.2,.34,.1));
+      add(sph(.035,gold),-.2,.34,.12);
+      U.h = .78; break;
+    }
+    case 'n': {
+      const hm = mat(S.horse,{r:.7});
+      add(sph(.2,hm),0,.5,0).scale.set(.85,.85,1.55);
+      for (const [x,z] of [[.09,.2],[-.09,.2],[.09,-.2],[-.09,-.2]]) add(cyl(.035,.03,.42,hm,8),x,.21,z);
+      add(cyl(.065,.085,.34,hm,10),0,.72,.26).rotation.x = .55;
+      add(box(.12,.13,.27,hm),0,.87,.4).rotation.x = .35;
+      add(box(.03,.14,.2,dark),0,.83,.24).rotation.x = .55;
+      add(cyl(.02,.04,.25,dark,6),0,.5,-.34).rotation.x = -.6;
+      add(box(.36,.16,.46,robe),0,.52,0);
+      add(lathe([[0,0],[.13,0],[.11,.22],[.08,.3],[0,.32]],robe),0,.62,-.02);
+      add(sph(.085,skin),0,1.0,-.02);
+      add(hemi(.095,steel),0,1.01,-.02);
+      add(cone(.035,.16,dark),0,1.15,-.02);
+      arm.position.set(.14,.86,0);
+      add(box(.035,.5,.012,steel),0,.3,0,arm);
+      add(box(.14,.025,.035,gold),0,.05,0,arm);
+      add(cyl(.015,.015,.1,wood,6),0,0,0,arm);
+      U.h = 1.1; break;
+    }
+    case 'b': {
+      add(lathe([[0,0],[.26,0],[.26,.05],[.2,.12],[.16,.45],[.12,.7],[.09,.8],[0,.82]],robe));
+      flatRing(add(torus(.105,.03,white),0,.76,0));
+      add(sph(.095,skin),0,.9,0);
+      add(cyl(.05,.1,.26,white),0,1.08,0);
+      add(cone(.05,.08,white),0,1.25,0);
+      flatRing(add(torus(.098,.012,gold),0,.97,0));
+      arm.position.set(.22,.52,.05);
+      add(cyl(.018,.018,1.1,gold,8),0,.2,0,arm);
+      add(torus(.07,.016,gold,Math.PI*1.3),-.07,.75,0,arm);
+      U.h = 1.2; break;
+    }
+    case 'r': {
+      const st = mat(S.stone,{r:.95});
+      add(cyl(.24,.3,.72,st),0,.36,0);
+      add(cyl(.27,.27,.08,st),0,.72,0);
+      for (let i=0;i<4;i++){ const a=i*Math.PI/2+Math.PI/4; add(box(.13,.13,.13,st),Math.sin(a)*.2,.82,Math.cos(a)*.2).rotation.y=a; }
+      const eye = mat(S.glow,{e:S.glow,ei:1.5});
+      add(sph(.035,eye),.08,.56,.26); add(sph(.035,eye),-.08,.56,.26);
+      add(box(.2,.03,.05,mat(0x1a1a1a)),0,.46,.27);
+      const arm2 = new THREE.Group(); body.add(arm2);
+      arm.position.set(.32,.58,0); arm2.position.set(-.32,.58,0);
+      for (const a of [arm,arm2]){ add(box(.13,.42,.13,st),0,-.17,0,a); add(box(.18,.16,.18,st),0,-.42,0,a); }
+      U.arm2 = arm2; U.h = .9; break;
+    }
+    case 'q': {
+      add(lathe([[0,0],[.3,0],[.3,.04],[.22,.2],[.15,.45],[.11,.62],[.13,.7],[.08,.8],[0,.82]],robe));
+      flatRing(add(torus(.12,.025,gold),0,.7,0));
+      add(sph(.1,skin),0,.92,0);
+      add(sph(.105,mat(0xd9a23a,{r:.8})),0,.94,-.03);
+      add(cyl(.085,.07,.08,mat(0xe2b33c,{r:.4,m:.4,side:THREE.DoubleSide}),16,true),0,1.03,0);
+      for (let i=0;i<5;i++){ const a=i/5*Math.PI*2; add(cone(.02,.07,gold,6),Math.sin(a)*.08,1.1,Math.cos(a)*.08); }
+      add(sph(.025,mat(S.glow,{e:S.glow})),0,1.03,.085);
+      arm.position.set(.2,.62,.05);
+      add(cyl(.012,.012,.42,gold,6),0,.16,0,arm);
+      U.tip = add(sph(.045,mat(S.glow,{e:S.glow,ei:1.2})),0,.39,0,arm);
+      U.h = 1.1; break;
+    }
+    case 'k': {
+      add(lathe([[0,0],[.31,0],[.31,.05],[.23,.2],[.18,.55],[.14,.76],[.1,.86],[0,.88]],robe));
+      flatRing(add(torus(.14,.045,white),0,.82,0));
+      add(sph(.11,skin),0,.99,0);
+      add(cone(.075,.16,mat(0xe9e4d8,{r:1}),10),0,.92,.05).rotation.x = Math.PI;
+      add(sph(.09,dark),0,1.12,0);
+      add(cyl(.1,.09,.12,mat(0xe2b33c,{r:.4,m:.4,side:THREE.DoubleSide}),16,true),0,1.12,0);
+      for (let i=0;i<4;i++){ const a=i/4*Math.PI*2; add(cone(.025,.09,gold,6),Math.sin(a)*.095,1.22,Math.cos(a)*.095); }
+      add(box(.02,.1,.02,gold),0,1.3,0); add(box(.07,.02,.02,gold),0,1.31,0);
+      arm.position.set(.23,.64,.05);
+      add(box(.04,.62,.012,steel),0,.36,0,arm);
+      add(box(.18,.03,.04,gold),0,.05,0,arm);
+      add(cyl(.016,.016,.12,wood,6),0,-.02,0,arm);
+      add(sph(.028,gold),0,-.09,0,arm);
+      U.h = 1.3; break;
+    }
+  }
+  const mats = new Set();
+  g.traverse(o => { if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; mats.add(o.material); } });
+  U.mats = [...mats];
+  U.mats.forEach(m => { m.userData.e0 = m.emissive.getHex(); m.userData.ei0 = m.emissiveIntensity; });
+  arm.userData.restZ = arm.position.z;
+  g.userData = U;
+  return g;
+}
+
+const piecesGroup = new THREE.Group(); scene.add(piecesGroup);
+const pieceMesh = new Map();
+const homeAngle = c => c==='w' ? Math.PI : 0;
+function rebuildPieces(){
+  piecesGroup.clear(); pieceMesh.clear();
+  state.b.forEach((p,sq) => {
+    if (!p) return;
+    const g = build(p.t,p.c); g.userData.pid = p.id;
+    g.position.copy(sqPos(sq)); g.rotation.y = homeAngle(p.c);
+    piecesGroup.add(g); pieceMesh.set(p.id,g);
+  });
+}
+
+/* =========================== ANIMATION CORE =========================== */
+const easeInOut = k => k<.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
+const easeIn = k => k*k*k, easeOut = k => 1-Math.pow(1-k,3), linear = k => k;
+const tweens = [];
+function tween(ms, fn, ease=easeInOut){ return new Promise(res => tweens.push({t0:performance.now(), ms:Math.max(1,ms), fn, ease, res})); }
+const wait = ms => tween(ms, ()=>{}, linear);
+
+const parts = [], pGeo = new THREE.SphereGeometry(1,6,4), orbGeo = new THREE.SphereGeometry(.09,12,8);
+function burst(pos,{n=20,color=0xffd27a,speed=2,size=.04,life=.6,grav=-4,up=1}={}){
+  for (let i=0;i<n;i++){
+    const m = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({color, transparent:true, depthWrite:false}));
+    m.scale.setScalar(size*(.6+Math.random()*.8)); m.position.copy(pos);
+    const v = new V3(Math.random()*2-1, Math.random()*up, Math.random()*2-1).normalize().multiplyScalar(speed*(.4+Math.random()*.6));
+    scene.add(m); parts.push({m, v, life:life*(.7+Math.random()*.6), age:0, grav});
+  }
+}
+let shake = 0;
+
+/* ---- camera ---- */
+const orbit = {theta:0, phi:.95, zoom:1, target:new V3(0,0,.3)};
+let baseR = 12.5, cine = null;
+function orbitPose(){
+  const r = baseR*orbit.zoom, {theta,phi,target} = orbit;
+  return {pos:new V3(target.x+r*Math.sin(phi)*Math.sin(theta), target.y+r*Math.cos(phi), target.z+r*Math.sin(phi)*Math.cos(theta)), look:target.clone()};
+}
+async function camTo(pos, look, ms){
+  const a = cine ? {pos:cine.pos.clone(), look:cine.look.clone()} : orbitPose();
+  cine = {pos:a.pos.clone(), look:a.look.clone()};
+  await tween(ms, k => { cine.pos.lerpVectors(a.pos,pos,k); cine.look.lerpVectors(a.look,look,k); });
+}
+async function camHome(ms){
+  if (!cine) return;
+  const a = {pos:cine.pos.clone(), look:cine.look.clone()};
+  await tween(ms, k => { const o=orbitPose(); cine.pos.lerpVectors(a.pos,o.pos,k); cine.look.lerpVectors(a.look,o.look,k); });
+  cine = null;
+}
+
+/* ---- piece motion helpers ---- */
+const chest = g => g.position.clone().add(new V3(0, g.userData.h*.6, 0));
+const between = (a,b) => chest(a).add(chest(b)).multiplyScalar(.5);
+const angleTo = (from,to) => Math.atan2(to.x-from.x, to.z-from.z);
+function face(g, ang, ms=200){
+  const a0 = g.rotation.y; let d = ang-a0;
+  d = Math.atan2(Math.sin(d), Math.cos(d));
+  if (Math.abs(d)<.01) return Promise.resolve();
+  return tween(ms, k => g.rotation.y = a0+d*k);
+}
+async function walk(g, dest, {jump=false}={}){
+  const start = g.position.clone(), d = start.distanceTo(dest);
+  if (d<.01) return;
+  await face(g, angleTo(start,dest), 180);
+  sfx.step();
+  const ms = Math.max(420, d*330), hops = Math.max(1, Math.round(d*2.2)), body = g.userData.body;
+  const arc = jump || g.userData.type==='n';
+  await tween(ms, k => {
+    g.position.lerpVectors(start,dest,k);
+    if (arc) g.position.y = Math.sin(k*Math.PI)*Math.min(1, .3+d*.25);
+    else { const s = Math.sin(k*Math.PI*hops); body.position.y = Math.abs(s)*.08; body.rotation.z = s*.08; }
+  });
+  g.position.y = 0; body.position.y = 0; body.rotation.z = 0;
+  if (arc) sfx.step();
+}
+function swingTo(arm, to, ms, ease){ const a = arm.rotation.x; return tween(ms, k => arm.rotation.x = a+(to-a)*k, ease); }
+function rest(g, ms=220){
+  const {arm,arm2,body} = g.userData;
+  const a0=arm.rotation.x, z0=arm.position.z, zr=arm.userData.restZ, b0=body.rotation.x, a20=arm2?arm2.rotation.x:0;
+  return tween(ms, k => { arm.rotation.x=a0*(1-k); arm.position.z=z0+(zr-z0)*k; body.rotation.x=b0*(1-k); if (arm2) arm2.rotation.x=a20*(1-k); });
+}
+function knock(g, from, amt, ms=220){
+  const base = g.position.clone(), dir = base.clone().sub(from.position).setY(0).normalize();
+  return tween(ms, k => g.position.copy(base).addScaledVector(dir, Math.sin(k*Math.PI)*amt), linear);
+}
+function setOpacity(g,o){ for (const m of g.userData.mats){ m.transparent = true; m.opacity = o; } }
+const fadeOut = (g,ms=400) => tween(ms, k => setOpacity(g,1-k));
+function flash(g, hex, ms=200){
+  const ms_ = g.userData.mats;
+  ms_.forEach(m => { m.emissive.setHex(hex); m.emissiveIntensity = 1.2; });
+  return tween(ms, k => ms_.forEach(m => m.emissiveIntensity = 1.2*(1-k)))
+    .then(() => ms_.forEach(m => { m.emissive.setHex(m.userData.e0); m.emissiveIntensity = m.userData.ei0; }));
+}
+
+/* ---- battle moves: each piece strikes in its own style ---- */
+const STRIKE = {
+  async p(g){ const arm=g.userData.arm, z=arm.userData.restZ; await swingTo(arm,Math.PI/2,160); sfx.whoosh(); await tween(130,k=>arm.position.z=z+k*.32,easeIn); },
+  async n(g){ const {body,arm}=g.userData;
+    await Promise.all([tween(260,k=>body.rotation.x=-.45*k), swingTo(arm,-1.4,260)]); sfx.whoosh();
+    await Promise.all([tween(200,k=>body.rotation.x=-.45*(1-k)), swingTo(arm,1.3,200,easeIn)]); },
+  async b(g){ const arm=g.userData.arm; await swingTo(arm,-1.7,280); sfx.whoosh(); await swingTo(arm,1.2,190,easeIn); },
+  async r(g){ const arm=g.userData.arm; await swingTo(arm,-2.5,300); sfx.whoosh(); await swingTo(arm,-1.5,180,easeIn); },
+  async q(g){ const arm=g.userData.arm; await swingTo(arm,-.9,220); sfx.whoosh(); await swingTo(arm,1.1,170,easeIn); },
+  async k(g){ const arm=g.userData.arm; await swingTo(arm,-1.5,240); sfx.whoosh(); await swingTo(arm,1.35,170,easeIn); },
+};
+async function parry(g, from){
+  const arm = g.userData.arm, a = arm.rotation.x;
+  sfx.clang(); burst(between(g,from), {n:18, color:0xffe08a, speed:2.6, size:.025, life:.35, grav:-6});
+  await Promise.all([tween(90, k => arm.rotation.x = a+(.7-a)*k), knock(g,from,.07)]);
+}
+function hit(g, from){
+  sfx.thud(); shake = .08; flash(g, 0xff2a2a, 260);
+  burst(chest(g), {n:24, color:0xfff1c0, speed:2.2, size:.03, life:.45, grav:-5});
+  return knock(g, from, .14, 260);
+}
+async function dieFall(g){
+  const b = g.userData.body;
+  await tween(420, k => b.rotation.x = -1.45*k, easeIn);
+  sfx.thud(); burst(g.position.clone().setY(.1), {n:24, color:0x9b8f78, speed:.9, size:.06, life:.9, grav:.3, up:.4});
+  await wait(250); await fadeOut(g,350);
+}
+async function dieBurn(g){
+  const ms = g.userData.mats, cols = ms.map(m=>m.color.clone()), black = new THREE.Color(0x151515);
+  await tween(500, k => ms.forEach((m,i) => { m.color.copy(cols[i]).lerp(black,k); m.emissive.setHex(0xff5010); m.emissiveIntensity = .9*Math.sin(k*Math.PI)+.15; }));
+  let last = 0;
+  await tween(650, k => {
+    g.scale.setScalar(1-k*.9); setOpacity(g,1-k);
+    if (k-last>.1){ last=k; burst(chest(g), {n:5, color:0x3a3a3a, speed:.5, size:.08, life:1, grav:.8}); }
+  });
+}
+async function bolt(ag, vg, kill){
+  const {arm,tip,color} = ag.userData, glow = SIDE[color].glow;
+  await swingTo(arm, 1.25, 220);
+  sfx.charge();
+  await tween(320, k => tip.scale.setScalar(1+k*1.6));
+  const from = new V3(); tip.getWorldPosition(from); const to = chest(vg);
+  const orb = new THREE.Mesh(orbGeo, new THREE.MeshBasicMaterial({color:glow})); orb.position.copy(from); scene.add(orb);
+  fxLight.color.setHex(glow); fxLight.intensity = 3; sfx.zap(); tip.scale.setScalar(1);
+  let last = 0;
+  await tween(260, k => {
+    orb.position.lerpVectors(from,to,k); orb.position.y += Math.sin(k*Math.PI)*.15; fxLight.position.copy(orb.position);
+    if (k-last>.12){ last=k; burst(orb.position, {n:4, color:glow, speed:.4, size:.03, life:.3, grav:0}); }
+  }, linear);
+  scene.remove(orb); orb.material.dispose();
+  if (kill){ burst(to, {n:40, color:glow, speed:2.4, size:.04, life:.7, grav:-1}); flash(vg, glow, 400); shake = .15; sfx.thud(); }
+  else { burst(to, {n:18, color:glow, speed:2, size:.03, life:.4, grav:-2}); await parry(vg, ag); }
+  tween(300, k => fxLight.intensity = 3*(1-k));
+  await Promise.all([rest(ag), kill ? null : rest(vg)]);
+}
+async function crush(ag, vg, vpos){
+  const {arm,arm2,body} = ag.userData, start = ag.position.clone();
+  await Promise.all([swingTo(arm,-2.8,260), swingTo(arm2,-2.8,260)]);
+  sfx.whoosh();
+  await tween(480, k => { ag.position.lerpVectors(start,vpos,k); ag.position.y = Math.sin(k*Math.PI)*.95; }, linear);
+  ag.position.y = 0;
+  sfx.crush(); shake = .28;
+  burst(vpos.clone().setY(.1), {n:40, color:0x9b8f78, speed:1.6, size:.07, life:1, grav:.2, up:.5});
+  await Promise.all([tween(110, k => vg.scale.set(1+.4*k, 1-.92*k, 1+.4*k)), tween(160, k => body.position.y = -.08*Math.sin(k*Math.PI))]);
+  await Promise.all([rest(ag,300), fadeOut(vg,300)]);
+}
+async function melee(ag, ap, vg, vp){
+  await STRIKE[ap.t](ag); await parry(vg,ag); await Promise.all([rest(ag),rest(vg)]);
+  await wait(100);
+  await STRIKE[vp.t](vg); await parry(ag,vg); await Promise.all([rest(ag),rest(vg)]);
+  await wait(80);
+  await STRIKE[ap.t](ag); await hit(vg,ag); await rest(ag);
+}
+
+async function battle(ag, ap, vg, vp, vpos, dest){
+  const apos = ag.position.clone(), dir = vpos.clone().sub(apos), dist = dir.length(); dir.normalize();
+  const reach = ap.t==='q' ? 1.6 : ap.t==='r' ? 1.0 : .78;
+  const stop = dist>reach ? vpos.clone().addScaledVector(dir,-reach) : apos.clone();
+  const mid = stop.clone().add(vpos).multiplyScalar(.5);
+  const perp = new V3(dir.z,0,-dir.x), camNow = camera.position.clone().sub(mid).setY(0);
+  if (perp.dot(camNow)<0) perp.negate();
+  const cpos = mid.clone().addScaledVector(perp,2.5).add(new V3(0,1.3,0)).addScaledVector(camNow.normalize(),.9);
+  await Promise.all([camTo(cpos, mid.clone().setY(.5), 700), walk(ag,stop), face(vg, angleTo(vpos,stop), 300)]);
+  await face(ag, angleTo(ag.position,vpos), 150);
+  if (ap.t==='q'){ await bolt(ag,vg,false); await wait(150); await bolt(ag,vg,true); await dieBurn(vg); }
+  else if (ap.t==='r'){
+    await STRIKE.r(ag); await parry(vg,ag); await Promise.all([rest(ag),rest(vg)]);
+    await STRIKE[vp.t](vg); sfx.thud(); burst(between(ag,vg), {n:14, color:0x9b8f78, speed:1, size:.05, life:.5, grav:-2}); await rest(vg);
+    await crush(ag, vg, vpos);
+  } else { await melee(ag,ap,vg,vp); await dieFall(vg); }
+  piecesGroup.remove(vg);
+  await Promise.all([walk(ag,dest), camHome(800)]);
+}
+
+async function promote(g, p, to){
+  burst(chest(g), {n:40, color:0xffe08a, speed:1.8, size:.04, life:.8, grav:-1}); sfx.charge();
+  const ng = build(to,p.c); ng.userData.pid = p.id;
+  ng.position.copy(g.position); ng.rotation.y = g.rotation.y; ng.scale.setScalar(.01);
+  piecesGroup.remove(g); piecesGroup.add(ng); pieceMesh.set(p.id, ng);
+  banner('Promoted');
+  await tween(420, k => ng.scale.setScalar(.01+.99*k), easeOut);
+}
+
+async function animateMove(s, m){
+  const p = s.b[m.from], g = pieceMesh.get(p.id), to = sqPos(m.to);
+  if (m.cap>=0){
+    const vp = s.b[m.cap], vg = pieceMesh.get(vp.id), vpos = sqPos(m.cap);
+    if (battles) await battle(g,p,vg,vp,vpos,to);
+    else {
+      burst(chest(vg), {n:20, color:0x9b8f78, speed:1, size:.05, life:.6, grav:.2}); sfx.thud();
+      await fadeOut(vg,250); piecesGroup.remove(vg); await walk(g,to);
+    }
+    pieceMesh.delete(vp.id);
+  } else await walk(g,to);
+  if (m.castle){
+    const base = p.c==='w' ? 0 : 56, rs = m.castle==='K' ? base+7 : base, rt = m.castle==='K' ? base+5 : base+3;
+    const rg = pieceMesh.get(s.b[rs].id);
+    await walk(rg, sqPos(rt), {jump:true}); face(rg, homeAngle(p.c));
+  }
+  let fg = g;
+  if (m.promo){ await promote(g,p,m.promo); fg = pieceMesh.get(p.id); }
+  await face(fg, homeAngle(p.c), 220);
+}
+
+/* =========================== GAME FLOW =========================== */
+let state = initialState(), legalNow = legal(state), history = [], sel = -1, selG = null;
+let busy = false, thinking = false, over = null, lastMove = null;
+let mode = 'ai', depth = 2;
+let battles = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const $ = id => document.getElementById(id);
+const statusText=$('statusText'), dot=$('dot'), bannerEl=$('banner');
+const GLYPH = {p:'♟',n:'♞',b:'♝',r:'♜',q:'♛'};
+
+function banner(txt){ bannerEl.hidden = true; void bannerEl.offsetWidth; bannerEl.textContent = txt; bannerEl.hidden = false; }
+bannerEl.addEventListener('animationend', () => bannerEl.hidden = true);
+
+function refreshMarks(){
+  markGroup.clear();
+  if (lastMove){ flat(planeG,lastMat,lastMove.from,.004); flat(planeG,lastMat,lastMove.to,.004); }
+  if (!over && inCheck(state,state.turn)) flat(planeG,checkMat,kingSq(state.b,state.turn),.005);
+  if (sel>=0){
+    flat(planeG,selMat,sel,.006);
+    const seen = new Set();
+    for (const m of legalNow){ if (m.from!==sel || seen.has(m.to)) continue; seen.add(m.to);
+      const cap = m.cap>=0; flat(cap?ringG:circG, cap?capMat:moveMat, m.to, .008); }
+  }
+}
+function setSel(sq){
+  if (selG){ selG.userData.body.position.y = 0; selG = null; }
+  sel = sq;
+  if (sq>=0) selG = pieceMesh.get(state.b[sq].id);
+  refreshMarks();
+}
+function updateHUD(){
+  const name = state.turn==='w' ? 'Blue' : 'Red';
+  dot.style.background = state.turn==='w' ? 'var(--blue)' : 'var(--red)';
+  dot.style.color = dot.style.background;
+  if (over) statusText.textContent = over.short;
+  else if (thinking) statusText.textContent = `${name} is plotting…`;
+  else statusText.textContent = `${name} to move` + (inCheck(state,state.turn) ? ' · Check' : '');
+  const sum = arr => arr.reduce((a,t)=>a+VAL[t],0)/100;
+  const sw = sum(state.caps.w), sb = sum(state.caps.b);
+  const show = arr => arr.slice().sort((a,b)=>VAL[b]-VAL[a]).map(t=>GLYPH[t]).join('');
+  $('capW').textContent = show(state.caps.w); $('capB').textContent = show(state.caps.b);
+  $('advW').textContent = sw>sb ? `+${Math.round(sw-sb)}` : ''; $('advB').textContent = sb>sw ? `+${Math.round(sb-sw)}` : '';
+  $('undoBtn').disabled = busy || !history.length;
+  $('newBtn').disabled = busy;
+  $('lvlSel').disabled = mode!=='ai';
+}
+function endCheck(){
+  if (!legalNow.length){
+    if (inCheck(state,state.turn)){ const w = state.turn==='w' ? 'Red' : 'Blue'; return {title:'Checkmate', text:`${w} wins the battle.`, short:`Checkmate · ${w} wins`}; }
+    return {title:'Stalemate', text:'No legal moves remain. The game is drawn.', short:'Stalemate · Draw'};
+  }
+  if (state.half>=100) return {title:'Draw', text:'Fifty moves passed without a capture or pawn move.', short:'Draw'};
+  if (insufficient(state.b)) return {title:'Draw', text:'Neither side has enough pieces left to checkmate.', short:'Draw'};
+  return null;
+}
+
+async function play(m){
+  busy = true; setSel(-1); updateHUD();
+  const prev = state;
+  history.push(prev);
+  await animateMove(prev, m);
+  state = make(prev, m); legalNow = legal(state); lastMove = {from:m.from, to:m.to};
+  over = endCheck();
+  refreshMarks();
+  if (over){ banner(over.title); $('endTitle').textContent = over.title; $('endText').textContent = over.text; setTimeout(()=>{ if (over) $('endModal').hidden = false; }, 1300); }
+  else if (inCheck(state,state.turn)){ banner('Check'); sfx.check(); }
+  busy = false; updateHUD();
+  if (!over && mode==='ai' && state.turn==='b') aiTurn();
+}
+function aiTurn(){
+  busy = true; thinking = true; updateHUD();
+  setTimeout(() => {
+    const m = bestMove(state, depth);
+    thinking = false;
+    if (m) play(m); else { busy = false; updateHUD(); }
+  }, 80);
+}
+function askPromo(){
+  return new Promise(res => {
+    const modal = $('promoModal'); modal.hidden = false;
+    modal.querySelector('button').focus();
+    modal.onclick = e => { const b = e.target.closest('button[data-p]'); if (!b) return; modal.hidden = true; modal.onclick = null; res(b.dataset.p); };
+  });
+}
+async function handleSquare(sq){
+  if (busy || over) return;
+  if (mode==='ai' && state.turn!=='w') return;
+  if (sel>=0){
+    const ms = legalNow.filter(m => m.from===sel && m.to===sq);
+    if (ms.length){
+      let m = ms[0];
+      if (ms.length>1){ busy = true; const pr = await askPromo(); busy = false; m = ms.find(x => x.promo===pr); }
+      play(m); return;
+    }
+  }
+  const p = state.b[sq];
+  if (p && p.c===state.turn && sq!==sel){ setSel(sq); sfx.select(); }
+  else setSel(-1);
+}
+function newGame(){
+  state = initialState(); legalNow = legal(state); history = []; over = null; lastMove = null;
+  $('endModal').hidden = true;
+  rebuildPieces(); setSel(-1); updateHUD();
+  if (mode==='ai' && state.turn==='b') aiTurn();
+}
+function undo(){
+  if (busy || !history.length) return;
+  let s = history.pop();
+  if (mode==='ai' && s.turn!=='w' && history.length) s = history.pop();
+  state = s; legalNow = legal(state); over = null; lastMove = null;
+  $('endModal').hidden = true;
+  rebuildPieces(); setSel(-1); updateHUD();
+  if (mode==='ai' && state.turn==='b') aiTurn();
+}
+
+/* ---- controls ---- */
+$('newBtn').onclick = newGame;
+$('undoBtn').onclick = undo;
+$('endNew').onclick = newGame;
+$('endClose').onclick = () => $('endModal').hidden = true;
+$('modeSel').onchange = e => { mode = e.target.value; updateHUD(); if (mode==='ai' && state.turn==='b' && !busy && !over) aiTurn(); };
+$('lvlSel').onchange = e => depth = +e.target.value;
+const toggle = (id, get, set, on, off) => { const b=$(id); const paint=()=>{ b.setAttribute('aria-pressed', String(get())); b.textContent = get()?on:off; }; b.onclick=()=>{ set(!get()); paint(); }; paint(); };
+toggle('battleBtn', ()=>battles, v=>battles=v, 'Battles on', 'Battles off');
+toggle('soundBtn', ()=>soundOn, v=>{ soundOn=v; if (v) ac(); }, 'Sound on', 'Sound off');
+$('viewBtn').onclick = () => { orbit.theta = 0; orbit.zoom = 1; orbit.phi = camera.aspect<1 ? .8 : .95; };
+
+/* ---- pointer: drag to orbit, tap to select ---- */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let down = null;
+canvas.addEventListener('pointerdown', e => { ac(); down = {x:e.clientX, y:e.clientY, th:orbit.theta, ph:orbit.phi, moved:false}; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => {
+  if (!down) return;
+  const dx = e.clientX-down.x, dy = e.clientY-down.y;
+  if (!down.moved && Math.hypot(dx,dy)>6) down.moved = true;
+  if (down.moved){ orbit.theta = down.th - dx*.008; orbit.phi = Math.min(1.35, Math.max(.3, down.ph - dy*.006)); }
+});
+canvas.addEventListener('pointerup', e => {
+  if (down && !down.moved) pick(e);
+  down = null;
+});
+canvas.addEventListener('pointercancel', () => down = null);
+canvas.addEventListener('wheel', e => { e.preventDefault(); orbit.zoom = Math.min(1.7, Math.max(.55, orbit.zoom*(1+e.deltaY*.001))); }, {passive:false});
+function pick(e){
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1);
+  ray.setFromCamera(ndc, camera);
+  for (const h of ray.intersectObjects([piecesGroup, boardGroup], true)){
+    let o = h.object;
+    while (o && o.userData.pid===undefined && o.userData.sq===undefined) o = o.parent;
+    if (!o) continue;
+    if (o.userData.pid!==undefined){ const sq = state.b.findIndex(p => p && p.id===o.userData.pid); if (sq>=0){ handleSquare(sq); return; } }
+    else { handleSquare(o.userData.sq); return; }
+  }
+}
+
+/* ---- resize + loop ---- */
+function resize(){
+  const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+  renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
+  baseR = Math.max(12.5, 12.8/camera.aspect);
+}
+new ResizeObserver(resize).observe(canvas); resize();
+if (camera.aspect<1) orbit.phi = .8;
+
+let lastT = performance.now();
+function loop(now){
+  const dt = Math.min(.05, (now-lastT)/1000); lastT = now;
+  for (let i=tweens.length-1; i>=0; i--){
+    const tw = tweens[i], k = Math.min(1, (now-tw.t0)/tw.ms);
+    tw.fn(tw.ease(k));
+    if (k>=1){ tweens.splice(i,1); tw.res(); }
+  }
+  for (let i=parts.length-1; i>=0; i--){
+    const p = parts[i]; p.age += dt;
+    if (p.age>=p.life){ scene.remove(p.m); p.m.material.dispose(); parts.splice(i,1); continue; }
+    p.v.y += p.grav*dt; p.m.position.addScaledVector(p.v, dt); p.m.material.opacity = 1-p.age/p.life;
+  }
+  if (selG && !busy) selG.userData.body.position.y = .04+Math.abs(Math.sin(now/170))*.07;
+  const pose = cine || orbitPose();
+  camera.position.copy(pose.pos);
+  if (shake>0){ camera.position.x += (Math.random()-.5)*shake; camera.position.y += (Math.random()-.5)*shake; shake = Math.max(0, shake-dt*1.2); }
+  camera.lookAt(pose.look);
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+rebuildPieces(); refreshMarks(); updateHUD();
+requestAnimationFrame(loop);
+})();
+</script>
