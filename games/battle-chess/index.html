@@ -1148,7 +1148,15 @@ async function animateMove(s, m){
   const p = s.b[m.from], g = pieceMesh.get(p.id), to = sqPos(m.to);
   if (m.cap>=0){
     const vp = s.b[m.cap], vg = pieceMesh.get(vp.id), vpos = sqPos(m.cap);
-    if (battles) await battle(g,p,vg,vp,vpos,to);
+    if (battles){
+      try { await battle(g,p,vg,vp,vpos,to); }
+      catch (e){                                   // never leave the game stuck mid-fight
+        console.error('battle failed', e);
+        piecesGroup.remove(vg); cine = null;
+        piecesGroup.children.forEach(solid);
+        g.position.copy(to); g.scale.setScalar(1); g.visible = true; loopAnim(g, g.userData.idle);
+      }
+    }
     else {
       burst(chest(vg), {n:20, color:0x9b8f78, speed:1, size:.05, life:.6, grav:.2}); sfx.thud();
       await fadeOut(vg,250); piecesGroup.remove(vg); await walk(g,to);
@@ -1169,7 +1177,7 @@ async function animateMove(s, m){
 let state = initialState(), legalNow = legal(state), history = [], sel = -1, selG = null;
 let busy = false, thinking = false, over = null, lastMove = null;
 let mode = 'ai', depth = 2;
-let battles = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let battles = true;   // the fights are the game; players can switch them off with the Battles button
 
 const $ = id => document.getElementById(id);
 const statusText=$('statusText'), dot=$('dot'), bannerEl=$('banner');
