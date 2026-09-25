@@ -358,15 +358,19 @@ function flat(g,m,sq,y){ const x=new THREE.Mesh(g,m); x.rotation.x=-Math.PI/2; c
 
 /* =========================== CHARACTERS =========================== */
 // Rigged, animated characters: KayKit Adventurers by Kay Lousberg (CC0).
-const SIDE = { w:{glow:0x8fc0ff, hue:.62, base:0x2e4fd6}, b:{glow:0xff8a6a, hue:.985, base:0xc8284c} };
+const SIDE = {
+  w:{glow:0x8fc0ff, hue:.62, base:0x2e4fd6, fire:0xff8a2a, bolt:0xaee0ff, holy:0xfff0a0, stone:[.6,.2], rock:0x8a93a8},
+  b:{glow:0xff8a6a, hue:.985, base:0xc8284c, fire:0x7dff4a, bolt:0xc070ff, holy:0xb070ff, stone:[.07,.5], rock:0xb07a50},
+};
 const MODELS = ['Knight','Mage','Barbarian','Rogue','Rogue_Hooded'];
+const HUMAN = {head:.66, leg:1.25, spine:1.08};   // longer legs, smaller heads than the chibi originals
 const CAST = {
-  p:{model:'Rogue_Hooded', show:['Knife','Knife_Offhand'], height:.74, idle:'Idle'},
-  n:{model:'Knight', show:['Knight_Helmet','Knight_Cape','1H_Sword','Round_Shield'], height:.88, idle:'Idle'},
-  b:{model:'Mage', show:['Mage_Hat','Mage_Cape','2H_Staff'], height:.92, idle:'Idle', tip:'2H_Staff'},
-  r:{model:'Barbarian', show:['Barbarian_Cape','2H_Axe'], height:.96, idle:'2H_Melee_Idle'},
-  q:{model:'Rogue', show:['Rogue_Cape'], height:.92, idle:'Idle', crown:'queen', wand:true},
-  k:{model:'Knight', show:['Knight_Cape','1H_Sword','Badge_Shield'], height:1.0, idle:'Idle', crown:'king'},
+  p:{model:'Rogue_Hooded', show:['Knife','Knife_Offhand'], height:.8, idle:'Idle', build:{head:.72, leg:1.18, spine:1.04}},
+  n:{model:'Knight', show:['Knight_Helmet','Knight_Cape','1H_Sword','Round_Shield'], height:.95, idle:'Idle'},
+  b:{model:'Mage', show:['Mage_Hat','Mage_Cape','2H_Staff'], height:.98, idle:'Idle', tip:'2H_Staff', caster:true},
+  r:{model:'Barbarian', show:[], height:1.0, idle:'Unarmed_Idle', stone:true, build:{head:.6, leg:1.12, spine:1.14}},
+  q:{model:'Rogue', show:['Rogue_Cape'], height:.98, idle:'Idle', crown:'queen', wand:true, caster:true},
+  k:{model:'Knight', show:['Knight_Cape','1H_Sword','Badge_Shield'], height:1.05, idle:'Idle', crown:'king'},
 };
 const BODY_PART = /_(Arm|Body|Head|Leg)/;
 const ASSET = {}, CLIPS = {};
@@ -387,6 +391,19 @@ function recolor(img, hue){
   x.putImageData(d,0,0);
   const t = new THREE.CanvasTexture(c); t.flipY = false; return t;
 }
+function recolorStone(img, [hue,sat]){
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'); x.drawImage(img,0,0,256,256);
+  const d = x.getImageData(0,0,256,256), a = d.data, col = new THREE.Color(), hsl = {};
+  for (let i=0;i<a.length;i+=4){
+    col.setRGB(a[i]/255, a[i+1]/255, a[i+2]/255); col.getHSL(hsl);
+    const l = Math.min(.85, Math.max(.12, .2+.5*hsl.l+(Math.random()-.5)*.14));
+    col.setHSL(hue+(Math.random()-.5)*.02, sat, l);
+    a[i] = col.r*255; a[i+1] = col.g*255; a[i+2] = col.b*255;
+  }
+  x.putImageData(d,0,0);
+  const t = new THREE.CanvasTexture(c); t.flipY = false; return t;
+}
 function loadImage(src){ return new Promise((res,rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('texture image failed')); i.src = src; }); }
 function firstMesh(o){ let m = null; if (o) o.traverse(x => { if (!m && x.isMesh) m = x; }); return m; }
 function loadAssets(onProgress){
@@ -401,11 +418,14 @@ function loadAssets(onProgress){
     scene.updateMatrixWorld(true);
     const bb = new THREE.Box3();
     scene.traverse(o => { if (o.isMesh){ if (!map && o.material.map) map = o.material.map; if (BODY_PART.test(o.name)) bb.expandByObject(o); } });
+    const hp = new V3(); scene.getObjectByName('head').getWorldPosition(hp);
     // bundled models carry their texture as an inline image; plain .glb files carry it inside
     const texSrc = window.KAYKIT_TEX && window.KAYKIT_TEX[n];
     (texSrc ? loadImage(texSrc) : Promise.resolve(map && map.image)).then(img => {
       if (!img) throw new Error(`texture missing for ${n}`);
-      ASSET[n] = {scene, H:bb.max.y-bb.min.y, minY:bb.min.y, tex:{w:recolor(img,SIDE.w.hue), b:recolor(img,SIDE.b.hue)}};
+      ASSET[n] = {scene, top:bb.max.y, minY:bb.min.y, headY:hp.y,
+        tex:{w:recolor(img,SIDE.w.hue), b:recolor(img,SIDE.b.hue)},
+        stone: n==='Barbarian' ? {w:recolorStone(img,SIDE.w.stone), b:recolorStone(img,SIDE.b.stone)} : null};
       gl.animations.forEach(a => CLIPS[a.name] = a);
       onProgress(++done/MODELS.length); res();
     }).catch(rej);
@@ -421,7 +441,7 @@ function helmInfo(){
 function makeCrown(kind){
   const H = helmInfo(), r = H.w*(kind==='king'?.3:.26), gold = new THREE.MeshStandardMaterial({color:0xf2c040, roughness:.3, metalness:.6, side:THREE.DoubleSide});
   const g = new THREE.Group(), h = r*(kind==='king'?.75:.45);
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(r,r*.92,h,20,1,true), gold); g.add(band);
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(r,r*.92,h,20,1,true), gold));
   const n = kind==='king' ? 5 : 7;
   for (let i=0;i<n;i++){
     const a = i/n*Math.PI*2, s = kind==='king' ? 1 : (i===0 ? 1.4 : .7);
@@ -442,18 +462,51 @@ function addTip(weapon, color){
   b.getCenter(tip.position); tip.position[ax] = b.max[ax]; m.add(tip);
   return tip;
 }
+let stoneMap = null;
+function stoneTexture(){
+  if (stoneMap) return stoneMap;
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+  x.fillStyle = '#8a8378'; x.fillRect(0,0,128,128);
+  for (let i=0;i<500;i++){ const v = 100+Math.random()*80|0; x.fillStyle = `rgba(${v},${v-6},${v-14},.5)`; x.fillRect(Math.random()*128,Math.random()*128,2+Math.random()*6,2+Math.random()*4); }
+  x.strokeStyle = 'rgba(40,36,30,.6)'; x.lineWidth = 1.5;
+  for (let y=0;y<128;y+=16){ x.beginPath(); x.moveTo(0,y); x.lineTo(128,y); x.stroke();
+    for (let xx=(y/16)%2*16; xx<128; xx+=32){ x.beginPath(); x.moveTo(xx,y); x.lineTo(xx,y+16); x.stroke(); } }
+  stoneMap = new THREE.CanvasTexture(c); stoneMap.wrapS = stoneMap.wrapT = THREE.RepeatWrapping; stoneMap.repeat.set(3,2);
+  return stoneMap;
+}
+function makeTower(c, mats){
+  const t = new THREE.Group(), M = o => { const m = new THREE.MeshStandardMaterial(o); mats.push(m); return m; };
+  const add = (geo,mat,x,y,z) => { const m = new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.castShadow = m.receiveShadow = true; t.add(m); return m; };
+  const st = M({map:stoneTexture(), color:c==='w'?0xc4cad8:0xe0c2a8, roughness:.95});
+  add(new THREE.CylinderGeometry(.24,.3,.72,20),st,0,.4,0);
+  add(new THREE.CylinderGeometry(.3,.27,.1,20),st,0,.8,0);
+  for (let i=0;i<6;i++){ const a = i/6*Math.PI*2; add(new THREE.BoxGeometry(.11,.12,.09),st,Math.sin(a)*.24,.91,Math.cos(a)*.24).rotation.y = a; }
+  add(new THREE.BoxGeometry(.13,.22,.04),M({color:0x1a1410,roughness:1}),0,.15,.29);
+  const glow = M({color:SIDE[c].glow, emissive:SIDE[c].glow, emissiveIntensity:.8});
+  for (const a of [-.9,.9]) add(new THREE.BoxGeometry(.05,.09,.03),glow,Math.sin(a)*.265,.55,Math.cos(a)*.265).rotation.y = a;
+  add(new THREE.CylinderGeometry(.01,.01,.35,6),M({color:0x5a4030}),0,1.12,0);
+  add(new THREE.BoxGeometry(.18,.11,.01),M({color:SIDE[c].base, side:THREE.DoubleSide}),.09,1.22,0);
+  return t;
+}
+function applyBuild(U){
+  const B = U.bones, P = U.build; if (!B.head) return;
+  B.hips.position.y *= P.leg;
+  B.ul.scale.setScalar(P.leg); B.ur.scale.setScalar(P.leg);
+  B.spine.scale.setScalar(P.spine); B.head.scale.setScalar(P.head/P.spine);
+}
 const baseGeo = new THREE.CylinderGeometry(.34,.37,.04,32);
 
 function build(t,c){
-  const spec = CAST[t], A = ASSET[spec.model];
-  const g = new THREE.Group(), model = THREE.SkeletonUtils.clone(A.scene);
-  const s = spec.height/A.H; model.scale.setScalar(s); model.position.y = .04-A.minY*s;
-  g.add(model);
-  const mats = [];
+  const spec = CAST[t], A = ASSET[spec.model], P = spec.build || HUMAN;
+  const g = new THREE.Group(), rig = new THREE.Group(), model = THREE.SkeletonUtils.clone(A.scene);
+  rig.add(model); g.add(rig);
+  const mats = [], tex = spec.stone ? A.stone[c] : A.tex[c];
   model.traverse(o => {
     if (!o.isMesh) return;
     o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
-    o.material = o.material.clone(); o.material.map = A.tex[c]; mats.push(o.material);
+    o.material = o.material.clone(); o.material.map = tex;
+    if (spec.stone){ o.material.flatShading = true; o.material.roughness = 1; o.material.metalness = 0; }
+    mats.push(o.material);
   });
   model.traverse(o => {
     if (!o.isMesh) return;
@@ -468,13 +521,23 @@ function build(t,c){
     w.traverse(o => { if (o.isMesh){ o.material = o.material.clone(); o.material.map = ASSET.Mage.tex[c]; o.castShadow = true; mats.push(o.material); } });
     model.getObjectByName('handslotr').add(w); tip = addTip(w, SIDE[c].glow);
   }
-  if (spec.tip) tip = addTip(model.getObjectByName(spec.tip), 0xfff3b0);
+  if (spec.tip) tip = addTip(model.getObjectByName(spec.tip), c==='w' ? 0xfff3b0 : 0xc070ff);
   if (tip) mats.push(tip.material);
   const base = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial({color:SIDE[c].base, roughness:.35, metalness:.3, emissive:SIDE[c].base, emissiveIntensity:.12}));
   base.position.y = .02; base.receiveShadow = true; g.add(base); mats.push(base.material);
-  mats.forEach(m => { m.userData.e0 = m.emissive.getHex(); m.userData.ei0 = m.emissiveIntensity; });
-  g.userData = {body:model, mixer:new THREE.AnimationMixer(model), actions:{}, cur:null, type:t, color:c, h:spec.height, mats, idle:spec.idle, tip};
+  const bones = {head:model.getObjectByName('head'), spine:model.getObjectByName('spine'), hips:model.getObjectByName('hips'),
+                 ul:model.getObjectByName('upperlegl'), ur:model.getObjectByName('upperlegr')};
+  const U = {body:model, rig, mixer:new THREE.AnimationMixer(model), actions:{}, cur:null, type:t, color:c, h:spec.height, mats,
+             idle:spec.idle, tip, hand:model.getObjectByName('handslotr'), bones, build:P, caster:!!spec.caster};
+  g.userData = U;
   loopAnim(g, spec.idle, 0, true);
+  // fit the reshaped body to the piece's height
+  U.mixer.update(0); applyBuild(U); model.updateMatrixWorld(true);
+  const hp = new V3(); bones.head.getWorldPosition(hp);
+  const top = hp.y + (A.top-A.headY)*P.head, s = spec.height/(top-A.minY);
+  model.scale.setScalar(s); model.position.y = .04-A.minY*s;
+  if (spec.stone){ rig.scale.set(1.12,1,1.12); U.tower = makeTower(c, mats); g.add(U.tower); rig.visible = false; U.form = 'tower'; }
+  mats.forEach(m => { m.userData.e0 = m.emissive.getHex(); m.userData.ei0 = m.emissiveIntensity; });
   return g;
 }
 
@@ -563,10 +626,29 @@ function face(g, ang, ms=200){
   if (Math.abs(d)<.01) return Promise.resolve();
   return tween(ms, k => g.rotation.y = a0+d*k);
 }
+/* ---- rook: castle tower that turns into a stone man ---- */
+async function morph(g, toGolem){
+  const U = g.userData;
+  if (!U.tower || (U.form==='golem')===toGolem) return;
+  U.form = toGolem ? 'golem' : 'tower';
+  sfx.crush(); shake = Math.max(shake,.12);
+  const p = g.position.clone().setY(.2);
+  burst(p, {n:24, color:0x9b8f78, speed:1, size:.07, life:.9, grav:.3});
+  burst(p.clone().setY(.5), {n:12, color:SIDE[U.color].rock, speed:1.6, size:.05, life:1.2, grav:-6, up:1, geo:rockGeo, lit:true, bounce:true});
+  const T = U.tower, Rg = U.rig; Rg.visible = true; T.visible = true;
+  await tween(700, k => {
+    const a = Math.max(.01, toGolem ? k : 1-k);          // 0 = tower, 1 = stone man
+    T.scale.set(1+.15*a, Math.max(.01,1-a), 1+.15*a); T.rotation.y = Math.sin(k*40)*.04*(1-Math.abs(2*k-1));
+    Rg.scale.set(1.12*a, a, 1.12*a);
+  });
+  T.visible = !toGolem; Rg.visible = toGolem; T.rotation.y = 0; T.scale.set(1,1,1); Rg.scale.set(1.12,1,1.12);
+}
+
 async function walk(g, dest, {jump=false}={}){
   const start = g.position.clone(), d = start.distanceTo(dest);
   if (d<.01) return;
   const U = g.userData, arc = jump || U.type==='n';
+  await morph(g, true);
   await face(g, angleTo(start,dest), 180);
   loopAnim(g, d>2.2 || arc ? 'Running_A' : 'Walking_A', .15);
   const ms = Math.max(450, d*(d>2.2 ? 300 : 420));
@@ -583,6 +665,7 @@ function knock(g, from, amt, ms=220){
   return tween(ms, k => g.position.copy(base).addScaledVector(dir, Math.sin(k*Math.PI)*amt), linear);
 }
 function setOpacity(g,o){ for (const m of g.userData.mats){ m.transparent = true; m.opacity = o; } }
+function solid(g){ for (const m of g.userData.mats){ m.opacity = 1; m.transparent = false; } }
 const fadeOut = (g,ms=400) => tween(ms, k => setOpacity(g,1-k));
 function flash(g, hex, ms=200){
   const ms_ = g.userData.mats;
@@ -590,44 +673,104 @@ function flash(g, hex, ms=200){
   return tween(ms, k => ms_.forEach(m => m.emissiveIntensity = 1-k))
     .then(() => ms_.forEach(m => { m.emissive.setHex(m.userData.e0); m.emissiveIntensity = m.userData.ei0; }));
 }
-const headTop = g => new V3(g.position.x, g.position.y+g.userData.h+.05, g.position.z);
+const choose = a => a[Math.floor(Math.random()*a.length)];
+const UP = new V3(0,1,0);
+function seg(a, b, r, mat){
+  const d = b.clone().sub(a), m = new THREE.Mesh(new THREE.CylinderGeometry(r,r,d.length(),5,1,true), mat);
+  m.position.copy(a).addScaledVector(d,.5); m.quaternion.setFromUnitVectors(UP, d.normalize()); return m;
+}
+function handPos(g){
+  const U = g.userData, p = new V3();
+  if (U.tip) U.tip.getWorldPosition(p); else if (U.hand) U.hand.getWorldPosition(p); else p.copy(chest(g));
+  return p;
+}
+const bubbleGeo = new THREE.SphereGeometry(.55,20,14), shardGeo = new THREE.ConeGeometry(.03,.18,5), beamGeo = new THREE.CylinderGeometry(.35,.35,6,24,1,true);
 
-/* ---- each piece's signature moves ---- */
-const MOVES = {
-  p:{open:'Dualwield_Melee_Attack_Stab',  fin:'Dualwield_Melee_Attack_Slice',     reach:.8},
-  n:{open:'1H_Melee_Attack_Slice_Diagonal', fin:'1H_Melee_Attack_Slice_Horizontal', reach:.95},
-  b:{open:'2H_Melee_Attack_Chop',         fin:'Spellcast_Shoot',                  reach:1.0, magic:0xfff3b0},
-  r:{open:'2H_Melee_Attack_Slice',        fin:'2H_Melee_Attack_Chop',             reach:1.05},
-  q:{open:'Spellcast_Shoot',              fin:'Spellcast_Long',                   reach:1.5},
-  k:{open:'1H_Melee_Attack_Chop',         fin:'1H_Melee_Attack_Stab',             reach:.95},
-};
-async function shoot(ag, vg, color, lethal){
-  const U = ag.userData, from = new V3();
-  if (U.tip) U.tip.getWorldPosition(from); else from.copy(chest(ag));
-  const to = chest(vg);
-  const orb = new THREE.Mesh(orbGeo, new THREE.MeshBasicMaterial({color})); orb.position.copy(from); scene.add(orb);
-  if (lethal) orb.scale.setScalar(1.6);
-  fxLight.color.setHex(color); fxLight.intensity = 3; sfx.zap();
+/* ---- spells ---- */
+async function missile(ag, vg, col, size=1, trail=0xffffff){
+  const from = handPos(ag), to = chest(vg);
+  const orb = new THREE.Mesh(orbGeo, new THREE.MeshBasicMaterial({color:col})); orb.scale.setScalar(size); orb.position.copy(from); scene.add(orb);
+  fxLight.color.setHex(col); fxLight.intensity = 3; sfx.zap();
   let last = 0;
-  await tween(lethal ? 340 : 260, k => {
-    orb.position.lerpVectors(from,to,k); orb.position.y += Math.sin(k*Math.PI)*.15; fxLight.position.copy(orb.position);
-    if (k-last>.1){ last = k; burst(orb.position, {n:4, color, speed:.4, size:.03, life:.3, grav:0}); }
+  await tween(280+size*60, k => {
+    orb.position.lerpVectors(from,to,k); orb.position.y += Math.sin(k*Math.PI)*.18; fxLight.position.copy(orb.position);
+    if (k-last>.07){ last = k; burst(orb.position, {n:3, color:col, speed:.3, size:.03*size, life:.35, grav:.3}); burst(orb.position, {n:1, color:trail, speed:.2, size:.02*size, life:.25, grav:0}); }
   }, linear);
   scene.remove(orb); orb.material.dispose();
-  burst(to, {n:lethal?40:18, color, speed:lethal?2.4:1.8, size:.035, life:.5, grav:-1});
+  burst(to, {n:Math.round(18*size), color:col, speed:1.6*size, size:.035, life:.5, grav:-1});
   tween(300, k => fxLight.intensity = 3*(1-k));
 }
+const SPELL = {
+  bolt: (ag,vg) => missile(ag, vg, SIDE[ag.userData.color].glow, 1),
+  async fireball(ag,vg){
+    await missile(ag, vg, SIDE[ag.userData.color].fire, 1.8, 0xffe070);
+    sfx.crush(); shake = .15; burst(chest(vg), {n:40, color:0xffc040, speed:2.2, size:.04, life:.6, grav:-1});
+  },
+  async lightning(ag,vg){
+    const col = SIDE[ag.userData.color].bolt, to = chest(vg), mat = new THREE.MeshBasicMaterial({color:col}), core = new THREE.MeshBasicMaterial({color:0xffffff});
+    const grp = new THREE.Group(); scene.add(grp);
+    fxLight.color.setHex(col); fxLight.position.copy(to).setY(to.y+1);
+    const draw = () => {
+      grp.children.forEach(m => m.geometry.dispose()); grp.clear();
+      let a = to.clone().add(new V3((Math.random()-.5)*.6, 6, (Math.random()-.5)*.6));
+      for (let i=1;i<=9;i++){
+        const k = i/9, b = i===9 ? to.clone() : a.clone().lerp(to, 1/(10-i)).add(new V3((Math.random()-.5)*.35*(1-k), 0, (Math.random()-.5)*.35*(1-k)));
+        grp.add(seg(a,b,.035,mat)); grp.add(seg(a,b,.012,core)); a = b;
+      }
+    };
+    sfx.zap(); sfx.crush(); shake = .18;
+    for (let f=0; f<3; f++){ draw(); grp.visible = true; fxLight.intensity = 6; await wait(80); grp.visible = false; fxLight.intensity = 0; await wait(50); }
+    burst(to, {n:30, color:col, speed:2.4, size:.03, life:.45, grav:-2});
+    grp.children.forEach(m => m.geometry.dispose()); scene.remove(grp); mat.dispose(); core.dispose();
+  },
+  async frost(ag,vg){
+    const from = handPos(ag), to = chest(vg), mat = new THREE.MeshStandardMaterial({color:0xcff6ff, emissive:0x3aa0ff, emissiveIntensity:.8, roughness:.2});
+    fxLight.color.setHex(0x9fe8ff); fxLight.intensity = 3; sfx.charge();
+    const dir = to.clone().sub(from).normalize(), shards = [];
+    for (let i=0;i<6;i++){
+      const m = new THREE.Mesh(shardGeo, mat); m.quaternion.setFromUnitVectors(UP,dir); m.visible = false; scene.add(m);
+      shards.push({m, off:new V3((Math.random()-.5)*.3,(Math.random()-.5)*.3,(Math.random()-.5)*.3), delay:i*.08});
+    }
+    await tween(520, k => shards.forEach(s => {
+      const kk = Math.min(1, Math.max(0, (k-s.delay)/.6));
+      s.m.position.copy(from).lerp(to,kk).addScaledVector(s.off,1-kk); s.m.visible = kk>0 && kk<1; fxLight.position.copy(s.m.position);
+    }), linear);
+    shards.forEach(s => scene.remove(s.m)); mat.dispose();
+    sfx.clang(); burst(to, {n:24, color:0xdff8ff, speed:1.6, size:.03, life:.5, grav:-3});
+    tween(300, k => fxLight.intensity = 3*(1-k));
+  },
+  async holy(ag,vg){
+    const col = SIDE[ag.userData.color].holy, p = vg.position;
+    const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide}));
+    beam.position.set(p.x,3,p.z); scene.add(beam); sfx.charge();
+    fxLight.color.setHex(col); fxLight.position.set(p.x,1.2,p.z);
+    await tween(350, k => { beam.material.opacity = .55*k; beam.scale.set(1,Math.max(.01,k),1); fxLight.intensity = 4*k; });
+    burst(chest(vg), {n:30, color:col, speed:1.2, size:.03, life:.8, grav:.8});
+    wait(900).then(() => tween(400, k => { beam.material.opacity = .55*(1-k); fxLight.intensity = 4*(1-k); }))
+             .then(() => { scene.remove(beam); beam.material.dispose(); });
+  },
+};
+
 // attacker plays a clip; at the moment of impact the defender reacts
-async function strike(ag, vg, name, react, speed=1){
-  const magic = name.startsWith('Spellcast'), dur = CLIPS[name].duration/speed*1000, hitAt = magic ? .55 : .45;
-  const anim = once(ag, name, {speed});
-  await wait(dur*hitAt*.6); if (!magic) sfx.whoosh();
+async function strike(ag, vg, name, react, spell){
+  const dur = CLIPS[name].duration*1000, hitAt = spell ? .55 : .45;
+  const anim = once(ag, name);
+  await wait(dur*hitAt*.6); if (!spell) sfx.whoosh();
   await wait(dur*hitAt*.4);
-  if (magic){ const U = ag.userData; await shoot(ag, vg, U.type==='b' ? MOVES.b.magic : SIDE[U.color].glow, name===MOVES[U.type].fin); }
+  if (spell) await spell();
   await Promise.all([anim, react()]);
 }
-async function block(g, from){
-  sfx.clang(); burst(between(g,from), {n:18, color:0xffe08a, speed:2.6, size:.025, life:.35, grav:-6});
+async function shieldBubble(g, col){
+  const m = new THREE.Mesh(bubbleGeo, new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:.4, blending:THREE.AdditiveBlending, depthWrite:false}));
+  m.position.copy(chest(g)); scene.add(m); sfx.clang(); playOnce(g,'Block',1.4);
+  await tween(140, k => m.scale.setScalar(.2+.8*k), easeOut);
+  burst(m.position, {n:16, color:col, speed:1.6, size:.03, life:.4, grav:0});
+  await tween(320, k => m.material.opacity = .4*(1-k));
+  scene.remove(m); m.material.dispose(); loopAnim(g, g.userData.idle, .2);
+}
+async function block(g, from, magicCol=0){
+  if (g.userData.caster) return shieldBubble(g, SIDE[g.userData.color].glow);   // mages raise a magic shield
+  sfx.clang(); burst(between(g,from), {n:18, color:magicCol||0xffe08a, speed:2.6, size:.025, life:.35, grav:-6});
   await Promise.all([once(g,'Block',{speed:1.4}), knock(g,from,.06)]);
 }
 async function hurt(g, from){
@@ -637,11 +780,11 @@ async function hurt(g, from){
 }
 
 /* ---- deaths ---- */
-async function dieAnim(g, name='Death_A', big=false){
-  flash(g, 0xff2a2a, 260); sfx.thud(); shake = big ? .2 : .1;
+async function dieAnim(g, name='Death_A'){
+  flash(g, 0xff2a2a, 260); sfx.thud(); shake = .1;
   const ms = playOnce(g, name);
   await wait(ms*.7);
-  sfx.thud(); burst(g.position.clone().setY(.1), {n:big?40:24, color:0x9b8f78, speed:big?1.4:.9, size:.06, life:.9, grav:.3, up:.4});
+  sfx.thud(); burst(g.position.clone().setY(.1), {n:24, color:0x9b8f78, speed:.9, size:.06, life:.9, grav:.3, up:.4});
   await wait(ms*.3+250); await fadeOut(g,400);
 }
 async function dieSparkle(g){
@@ -661,6 +804,32 @@ async function dieBurn(g){
     if (k-last>.1){ last = k; burst(chest(g), {n:5, color:0x3a3a3a, speed:.5, size:.08, life:1, grav:.8}); }
   });
 }
+async function dieZap(g){
+  flash(g, 0xffffff, 300);
+  const ms = g.userData.mats, cols = ms.map(m=>m.color.clone()), blk = new THREE.Color(0x222222), d = playOnce(g,'Death_A'); let last = 0;
+  await tween(d, k => {
+    ms.forEach((m,i) => m.color.copy(cols[i]).lerp(blk, Math.min(1,k*1.5)*.7));
+    if (k-last>.1){ last = k; burst(chest(g), {n:3, color:0x444444, speed:.4, size:.06, life:.9, grav:.8}); }
+  });
+  await wait(200); await fadeOut(g,400);
+}
+async function dieShatter(g){
+  const U = g.userData, ms = U.mats, cols = ms.map(m=>m.color.clone()), ice = new THREE.Color(0xa8e8ff);
+  U.mixer.timeScale = 0; sfx.charge();
+  await tween(450, k => ms.forEach((m,i) => { m.color.copy(cols[i]).lerp(ice,k*.8); m.emissive.setHex(0x2a7fff); m.emissiveIntensity = .5*k; }));
+  await wait(350);
+  const c = chest(g); g.visible = false; sfx.clang(); sfx.crush(); shake = .15;
+  burst(c, {n:22, color:0xcff4ff, speed:2, size:.06, life:1.5, grav:-6, up:1, geo:rockGeo, lit:true, bounce:true});
+  burst(c, {n:20, color:0xffffff, speed:1.2, size:.03, life:.6, grav:-1});
+  await wait(700);
+}
+async function dieCrumble(g){
+  const U = g.userData, c = chest(g); flash(g, 0xff2a2a, 150); await wait(150);
+  g.visible = false; sfx.crush(); shake = .2;
+  burst(c, {n:20, color:SIDE[U.color].rock, speed:1.9, size:.08, life:1.6, grav:-6, up:1.2, geo:rockGeo, lit:true, bounce:true});
+  burst(c, {n:24, color:0x9b8f78, speed:.9, size:.07, life:1, grav:.3});
+  await wait(900);
+}
 async function dieSquash(g){
   sfx.crush(); shake = .3; flash(g, 0xff2a2a, 200);
   burst(g.position.clone().setY(.1), {n:40, color:0x9b8f78, speed:1.6, size:.07, life:1, grav:.2, up:.5});
@@ -675,43 +844,77 @@ async function dieLaunch(g, from){
     b.rotation.x = -k*Math.PI*3; setOpacity(g, k>.6 ? 1-(k-.6)/.4 : 1);
   }, linear);
 }
-function finish(ag, vg){
-  const at = ag.userData.type, vt = vg.userData.type;
-  if (at==='q') return dieBurn(vg);                 // queen's fire burns the enemy to ash
-  if (at==='r') return dieSquash(vg);               // barbarian rook's axe flattens the enemy
-  if (at==='b') return dieSparkle(vg);              // bishop's holy light lifts the enemy away
-  if (vt==='q') return dieSparkle(vg);              // a queen fades in her own magic
-  if (vt==='r') return dieAnim(vg,'Death_B',true);  // a rook falls like a tree
-  return dieAnim(vg, at==='n' ? 'Death_B' : 'Death_A');
+function die(kind, vg, ag){
+  const vt = vg.userData.type;
+  if (vt==='r' && kind!=='shatter' && kind!=='squash') kind = 'crumble';   // the stone man breaks into rubble
+  if (vt==='q' && (kind==='fall' || kind==='fallB')) kind = 'lift';        // a queen fades away in her own magic
+  switch (kind){
+    case 'burn': return dieBurn(vg);
+    case 'zap': return dieZap(vg);
+    case 'lift': return dieSparkle(vg);
+    case 'shatter': return dieShatter(vg);
+    case 'squash': return dieSquash(vg);
+    case 'launch': return dieLaunch(vg, ag);
+    case 'crumble': return dieCrumble(vg);
+    case 'fallB': return dieAnim(vg,'Death_B');
+    default: return dieAnim(vg,'Death_A');
+  }
+}
+async function leapSmash(ag, vg){
+  const start = ag.position.clone(), vpos = vg.position.clone(), d = playOnce(ag,'Jump_Full_Short');
+  await wait(d*.2); sfx.whoosh();
+  await tween(d*.45, k => { ag.position.lerpVectors(start,vpos,k); ag.position.y = Math.sin(k*Math.PI)*.8; }, linear);
+  ag.position.y = 0;
+  await die('squash', vg, ag);
+  loopAnim(ag, ag.userData.idle, .2);
+}
+
+/* ---- each piece's arsenal: opening blows and finishing moves ---- */
+const ARSENAL = {
+  p:{open:['Dualwield_Melee_Attack_Stab','Dualwield_Melee_Attack_Chop'], fins:['slice','stab'], reach:.8},
+  n:{open:['1H_Melee_Attack_Slice_Diagonal','1H_Melee_Attack_Chop'], fins:['slash','spin'], reach:.95},
+  b:{open:['Spellcast_Shoot','2H_Melee_Attack_Chop'], fins:['lightning','holy','fireball'], reach:1.1},
+  r:{open:['Unarmed_Melee_Attack_Punch_A','Unarmed_Melee_Attack_Punch_B'], fins:['leap'], reach:.9},
+  q:{open:['Spellcast_Shoot'], fins:['fireball','frost','lightning'], reach:1.6},
+  k:{open:['1H_Melee_Attack_Chop','1H_Melee_Attack_Slice_Diagonal'], fins:['kick','kick','lightning'], reach:.95},
+};
+const FINISHERS = {
+  slice: (ag,vg) => strike(ag, vg, 'Dualwield_Melee_Attack_Slice', () => die('fall',vg,ag)),
+  stab: (ag,vg) => strike(ag, vg, 'Dualwield_Melee_Attack_Stab', () => die('fallB',vg,ag)),
+  slash: (ag,vg) => strike(ag, vg, '1H_Melee_Attack_Slice_Horizontal', () => die('fallB',vg,ag)),
+  spin: (ag,vg) => strike(ag, vg, '2H_Melee_Attack_Spin', () => die('fall',vg,ag)),
+  fireball: (ag,vg) => strike(ag, vg, 'Spellcast_Shoot', () => die('burn',vg,ag), () => SPELL.fireball(ag,vg)),
+  lightning: (ag,vg) => strike(ag, vg, 'Spellcast_Raise', () => die('zap',vg,ag), () => SPELL.lightning(ag,vg)),
+  frost: (ag,vg) => strike(ag, vg, 'Spellcast_Long', () => die('shatter',vg,ag), () => SPELL.frost(ag,vg)),
+  holy: (ag,vg) => strike(ag, vg, 'Spellcast_Long', () => die('lift',vg,ag), () => SPELL.holy(ag,vg)),
+  leap: (ag,vg) => leapSmash(ag, vg),
+  async kick(ag,vg){ await strike(ag, vg, '1H_Melee_Attack_Stab', () => hurt(vg,ag)); await strike(ag, vg, 'Unarmed_Melee_Attack_Kick', () => die('launch',vg,ag)); },
+};
+async function attack(ag, vg){                 // one opening blow that the other side blocks
+  const name = choose(ARSENAL[ag.userData.type].open), magic = name.startsWith('Spellcast');
+  await strike(ag, vg, name, () => block(vg, ag, magic ? SIDE[ag.userData.color].glow : 0), magic ? () => SPELL.bolt(ag,vg) : null);
 }
 
 async function battle(ag, ap, vg, vp, vpos, dest){
+  // fade every other piece so nothing blocks the close-up camera
+  const others = piecesGroup.children.filter(o => o!==ag && o!==vg);
+  const dim = k => others.forEach(o => setOpacity(o, 1-.85*k));
   const apos = ag.position.clone(), dir = vpos.clone().sub(apos), dist = dir.length(); dir.normalize();
-  const reach = MOVES[ap.t].reach;
+  const reach = ARSENAL[ap.t].reach;
   const stop = dist>reach ? vpos.clone().addScaledVector(dir,-reach) : apos.clone();
   const mid = stop.clone().add(vpos).multiplyScalar(.5);
   const perp = new V3(dir.z,0,-dir.x), camNow = camera.position.clone().sub(mid).setY(0);
   if (perp.dot(camNow)<0) perp.negate();
-  const cpos = mid.clone().addScaledVector(perp,2.3).add(new V3(0,1.1,0)).addScaledVector(camNow.normalize(),.9);
-  await Promise.all([camTo(cpos, mid.clone().setY(.5), 700), walk(ag,stop), face(vg, angleTo(vpos,stop), 300)]);
+  const cpos = mid.clone().addScaledVector(perp,2.4).add(new V3(0,1.3,0)).addScaledVector(camNow.normalize(),.9);
+  await Promise.all([camTo(cpos, mid.clone().setY(.5), 700), tween(350,dim), morph(ag,true), morph(vg,true)]);
+  await Promise.all([walk(ag,stop), face(vg, angleTo(vpos,stop), 300)]);
   await face(ag, angleTo(ag.position,vpos), 150);
-  const M = MOVES[ap.t], V = MOVES[vp.t];
   const rounds = ap.t===vp.t ? 2 : 1;               // rivals of the same rank trade extra blows
-  for (let i=0;i<rounds;i++){
-    await strike(ag, vg, M.open, () => block(vg,ag));
-    await wait(80);
-    await strike(vg, ag, V.open, () => block(ag,vg));   // the defender fights back
-    await wait(80);
-  }
-  if (ap.t==='k'){                                  // king: stab, then a royal kick that sends them flying
-    await strike(ag, vg, M.fin, () => hurt(vg,ag));
-    await strike(ag, vg, 'Unarmed_Melee_Attack_Kick', () => dieLaunch(vg,ag));
-  } else {
-    await strike(ag, vg, M.fin, () => finish(ag,vg));
-  }
+  for (let i=0;i<rounds;i++){ await attack(ag,vg); await wait(80); await attack(vg,ag); await wait(80); }
+  await FINISHERS[choose(ARSENAL[ap.t].fins)](ag, vg);
   piecesGroup.remove(vg);
   if (ap.t==='p') await once(ag,'Cheer',{speed:1.5, maxMs:1100});
-  await Promise.all([walk(ag,dest), camHome(800)]);
+  await Promise.all([walk(ag,dest), camHome(800), tween(400, k => dim(1-k)).then(() => others.forEach(solid))]);
 }
 
 async function promote(g, p, to){
@@ -737,11 +940,11 @@ async function animateMove(s, m){
   if (m.castle){
     const base = p.c==='w' ? 0 : 56, rs = m.castle==='K' ? base+7 : base, rt = m.castle==='K' ? base+5 : base+3;
     const rg = pieceMesh.get(s.b[rs].id);
-    await walk(rg, sqPos(rt), {jump:true}); face(rg, homeAngle(p.c));
+    await walk(rg, sqPos(rt), {jump:true}); await morph(rg, false); face(rg, homeAngle(p.c));
   }
   let fg = g;
   if (m.promo){ await promote(g,p,m.promo); fg = pieceMesh.get(p.id); }
-  await face(fg, homeAngle(p.c), 220);
+  await Promise.all([face(fg, homeAngle(p.c), 220), morph(fg, false)]);
 }
 
 /* =========================== GAME FLOW =========================== */
@@ -926,7 +1129,7 @@ function loop(now){
     p.m.material.opacity = p.bounce ? Math.min(1,(p.life-p.age)/(p.life*.3)) : 1-p.age/p.life;
   }
   const mdt = Math.min(.25, raw);
-  for (const pg of piecesGroup.children) pg.userData.mixer.update(mdt);
+  for (const pg of piecesGroup.children){ pg.userData.mixer.update(mdt); applyBuild(pg.userData); }
   const pose = cine || orbitPose();
   camera.position.copy(pose.pos);
   if (shake>0){ camera.position.x += (Math.random()-.5)*shake; camera.position.y += (Math.random()-.5)*shake; shake = Math.max(0, shake-dt*1.2); }
