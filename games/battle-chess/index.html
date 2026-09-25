@@ -387,6 +387,7 @@ function recolor(img, hue){
   x.putImageData(d,0,0);
   const t = new THREE.CanvasTexture(c); t.flipY = false; return t;
 }
+function loadImage(src){ return new Promise((res,rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('texture image failed')); i.src = src; }); }
 function firstMesh(o){ let m = null; if (o) o.traverse(x => { if (!m && x.isMesh) m = x; }); return m; }
 function loadAssets(onProgress){
   const loader = new THREE.GLTFLoader(); let done = 0;
@@ -400,9 +401,14 @@ function loadAssets(onProgress){
     scene.updateMatrixWorld(true);
     const bb = new THREE.Box3();
     scene.traverse(o => { if (o.isMesh){ if (!map && o.material.map) map = o.material.map; if (BODY_PART.test(o.name)) bb.expandByObject(o); } });
-    ASSET[n] = {scene, H:bb.max.y-bb.min.y, minY:bb.min.y, tex:{w:recolor(map.image,SIDE.w.hue), b:recolor(map.image,SIDE.b.hue)}};
-    gl.animations.forEach(a => CLIPS[a.name] = a);
-    onProgress(++done/MODELS.length); res();
+    // bundled models carry their texture as an inline image; plain .glb files carry it inside
+    const texSrc = window.KAYKIT_TEX && window.KAYKIT_TEX[n];
+    (texSrc ? loadImage(texSrc) : Promise.resolve(map && map.image)).then(img => {
+      if (!img) throw new Error(`texture missing for ${n}`);
+      ASSET[n] = {scene, H:bb.max.y-bb.min.y, minY:bb.min.y, tex:{w:recolor(img,SIDE.w.hue), b:recolor(img,SIDE.b.hue)}};
+      gl.animations.forEach(a => CLIPS[a.name] = a);
+      onProgress(++done/MODELS.length); res();
+    }).catch(rej);
   }, rej))));
 }
 function helmInfo(){
@@ -932,6 +938,6 @@ busy = true; updateHUD(); refreshMarks();
 requestAnimationFrame(loop);
 loadAssets(p => $('loadText').textContent = `Loading characters… ${Math.round(p*100)}%`)
   .then(() => { rebuildPieces(); $('loader').hidden = true; busy = false; updateHUD(); })
-  .catch(e => { console.error(e); $('loadText').textContent = 'The characters could not be loaded. Check your connection and reload the page.'; });
+  .catch(e => { console.error(e); $('loadText').textContent = `The characters could not be loaded (${e && e.message || e}). Reload the page to try again.`; });
 })();
 </script>
