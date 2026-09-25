@@ -34,6 +34,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Alegreya Sans'
 .btn.toggle[aria-pressed="false"]{color:var(--muted)}
 .field{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .hint{position:absolute;left:0;right:0;bottom:62px;margin:0;text-align:center;font-size:12px;color:var(--muted);pointer-events:none}
+.quip{position:absolute;left:50%;top:22%;transform:translateX(-50%);max-width:calc(100% - 32px);background:#f7f0dc;color:#1c1608;font:700 18px 'Alegreya Sans',system-ui,sans-serif;padding:8px 14px;border-radius:14px;border:2px solid #1c1608;box-shadow:0 4px 0 rgba(0,0,0,.5);pointer-events:none}
 .banner{position:absolute;left:0;right:0;top:38%;text-align:center;font-family:'Cinzel',Georgia,serif;font-weight:800;font-size:clamp(36px,9vw,76px);letter-spacing:.12em;color:var(--gold-2);text-shadow:0 4px 0 #000,0 0 30px rgba(243,215,138,.5);pointer-events:none;animation:pop 1.3s ease forwards}
 @keyframes pop{0%{opacity:0;transform:scale(.6)}15%{opacity:1;transform:scale(1.05)}25%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(1.08)}}
 .modal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,4,7,.6)}
@@ -57,6 +58,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Alegreya Sans'
     <div class="caprow"><b>Red took</b><span id="capB" class="glyphs blue"></span><span id="advB" class="adv"></span></div>
   </div>
   <div id="banner" class="banner" hidden></div>
+  <div id="quip" class="quip" role="status" hidden></div>
   <p class="hint">Drag to turn the board · Scroll to zoom · Tap a piece, then a glowing square · Animation rig by KayKit (CC0)</p>
   <nav class="dock" aria-label="Game controls">
     <button id="newBtn" class="btn primary" type="button">New game</button>
@@ -282,6 +284,7 @@ const sfx = {
   charge(){ this.o('sine',200,900,.4,.08); },
   step(){ this.n(.06,900,300,.12,'lowpass'); },
   select(){ this.o('triangle',660,880,.12,.07); },
+  ribbit(){ this.o('square',320,180,.07,.05); setTimeout(()=>this.o('square',300,170,.09,.05),110); },
   check(){ this.o('triangle',523,523,.18,.12); setTimeout(()=>this.o('triangle',784,784,.3,.12),150); },
 };
 
@@ -990,6 +993,125 @@ async function attack(ag, vg){                 // one opening blow that the othe
   await strike(ag, vg, name, () => block(vg, ag, magic ? SIDE[ag.userData.color].glow : 0), magic ? () => SPELL.bolt(ag,vg) : null);
 }
 
+/* ---- classic comedy kills: severed limbs, cut in half, eaten, turned into a frog ---- */
+const ARM = s => ['upperarm'+s, 'lowerarm'+s, 'wrist'+s, 'hand'+s, 'handslot'+s];
+const UPPER = ['spine', ...ARM('l'), ...ARM('r')];
+function partsOf(g, names){
+  const set = new Set(names), out = [];
+  g.userData.body.traverse(o => {
+    if (!o.isMesh || !o.visible) return;
+    let b = o.parent; while (b && !b.isBone) b = b.parent;
+    while (b && b.isBone && !set.has(b.name)) b = b.parent;
+    if (b && b.isBone) out.push(o);
+  });
+  return out;
+}
+const debris = [];
+function detach(meshes, vel, spin){             // copy the parts into a loose chunk that tumbles to the floor
+  if (!meshes.length) return;
+  const chunk = new THREE.Group(), c = new V3(), tmp = new V3(), mats = [];
+  meshes.forEach(m => { m.updateMatrixWorld(true); c.add(tmp.setFromMatrixPosition(m.matrixWorld)); });
+  c.divideScalar(meshes.length); chunk.position.copy(c); scene.add(chunk);
+  meshes.forEach(m => {
+    const k = new THREE.Mesh(m.geometry, m.material.clone()); m.matrixWorld.decompose(k.position, k.quaternion, k.scale);
+    k.position.sub(c); k.castShadow = true; chunk.add(k); mats.push(k.material); m.visible = false;
+  });
+  let minY = 0; chunk.children.forEach(k => minY = Math.min(minY, k.position.y));
+  debris.push({chunk, v:vel.clone(), axis:spin.clone().normalize(), w:spin.length(), rest:Math.max(.04, -minY*.4), mats, age:0});
+}
+function updateDebris(dt){
+  for (let i=debris.length-1; i>=0; i--){
+    const d = debris[i]; d.age += dt;
+    d.v.y -= 6*dt; d.chunk.position.addScaledVector(d.v, dt);
+    if (d.chunk.position.y<d.rest){ d.chunk.position.y = d.rest; d.v.set(d.v.x*.5, Math.abs(d.v.y)>.6 ? -d.v.y*.25 : 0, d.v.z*.5); d.w *= .6; }
+    if (d.w>.01) d.chunk.rotateOnWorldAxis(d.axis, d.w*dt);
+    if (d.age>1.8) d.mats.forEach(m => { m.transparent = true; m.opacity = Math.max(0, 1-(d.age-1.8)/.6); });
+    if (d.age>2.4){ scene.remove(d.chunk); d.mats.forEach(m => m.dispose()); debris.splice(i,1); }
+  }
+}
+let quipTimer = 0;
+function quip(text){
+  const q = $('quip'); q.textContent = text; q.hidden = false;
+  clearTimeout(quipTimer); quipTimer = setTimeout(() => q.hidden = true, 1500);
+}
+const sideOf = (ag, vg) => { const d = vg.position.clone().sub(ag.position).setY(0).normalize(); return {d, s:new V3(d.z,0,-d.x)}; };
+
+async function blackKnight(ag, vg){               // the loser keeps fighting as his arms come off
+  const {d, s} = sideOf(ag, vg);
+  const lose = (side, sgn, clip) => async () => {
+    sfx.clang(); sfx.thud(); shake = .08; flash(vg, 0xff2a2a, 200);
+    detach(partsOf(vg, ARM(side)), s.clone().multiplyScalar(sgn*.9).addScaledVector(d,.4).add(new V3(0,1.8,0)), new V3(3,0,2*sgn));
+    await once(vg, clip);
+  };
+  await strike(ag, vg, '1H_Melee_Attack_Slice_Diagonal', lose('l', 1, 'Hit_A'));
+  quip('Only a scratch!');
+  await strike(vg, ag, 'Unarmed_Melee_Attack_Kick', () => block(ag, vg));
+  await strike(ag, vg, '1H_Melee_Attack_Chop', lose('r', -1, 'Hit_B'));
+  quip("I've had worse!");
+  await strike(vg, ag, 'Unarmed_Melee_Attack_Kick', () => block(ag, vg));
+  await strike(ag, vg, '1H_Melee_Attack_Slice_Horizontal', () => dieAnim(vg, 'Death_B'));
+}
+async function halve(vg, ag){                     // clean cut: the top slides off, then the legs topple
+  const {d, s} = sideOf(ag, vg);
+  sfx.clang(); sfx.whoosh(); flash(vg, 0xffffff, 150); shake = .1;
+  vg.userData.mixer.timeScale = 0;
+  await wait(300);
+  detach(partsOf(vg, UPPER), d.clone().multiplyScalar(.9).add(new V3(0,.5,0)), s.clone().multiplyScalar(-3));
+  quip('Sliced!');
+  await wait(450);
+  detach(partsOf(vg, ['hips']), d.clone().multiplyScalar(-.2), s.clone().multiplyScalar(2.2));
+  sfx.thud(); burst(vg.position.clone().setY(.1), {n:20, color:0x9b8f78, speed:.8, size:.06, life:.9, grav:.3, up:.4});
+  await wait(900);
+}
+async function gobble(ag, vg){                    // the stone man eats the enemy and spits out the armour
+  await strike(ag, vg, 'Unarmed_Melee_Attack_Punch_A', () => hurt(vg, ag));
+  const {d} = sideOf(ag, vg), head = new V3(); ag.userData.body.getObjectByName('head').getWorldPosition(head);
+  const mouth = head.clone().addScaledVector(d, .12), p0 = vg.position.clone(), lift = mouth.clone().setY(mouth.y - vg.userData.h*.45);
+  playOnce(ag, 'Spellcast_Raise'); playOnce(vg, 'Hit_B'); sfx.whoosh();
+  await tween(650, k => vg.position.lerpVectors(p0, lift, k));
+  sfx.crush();
+  await tween(450, k => { vg.scale.setScalar(Math.max(.01, 1-k)); vg.position.lerpVectors(lift, mouth, k); });
+  vg.visible = false;
+  for (let i=0;i<3;i++){ sfx.crush(); shake = .08; burst(mouth, {n:6, color:0x9b8f78, speed:.8, size:.04, life:.5, grav:-2}); await wait(230); }
+  quip('Crunch!');
+  sfx.clang();
+  burst(mouth, {n:10, color:0xc9d0da, speed:1.8, size:.04, life:1.4, grav:-6, up:.6, geo:rockGeo, lit:true, bounce:true});
+  loopAnim(ag, ag.userData.idle, .2);
+  await wait(500);
+}
+async function toFrog(vg, ag){                    // poof: the enemy becomes a frog and hops away
+  sfx.charge(); burst(chest(vg), {n:30, color:0x7dff4a, speed:1.2, size:.04, life:.7, grav:.4});
+  burst(vg.position.clone().setY(.3), {n:20, color:0xcfd8c8, speed:.6, size:.08, life:.9, grav:.5});
+  vg.visible = false;
+  const frog = new THREE.Group(), green = new THREE.MeshStandardMaterial({color:0x4caf3a, roughness:.6}), white = new THREE.MeshStandardMaterial({color:0xffffff}), black = new THREE.MeshBasicMaterial({color:0x111111});
+  put(frog, new THREE.SphereGeometry(.1,16,12), green, 0,.07,0).scale.set(1.2,.7,1.3);
+  for (const x of [-.045,.045]){ put(frog, new THREE.SphereGeometry(.03,10,8), white, x,.13,.07); put(frog, new THREE.SphereGeometry(.014,8,6), black, x,.135,.095);
+    put(frog, new THREE.SphereGeometry(.04,10,8), green, x*2.2,.03,-.05).scale.set(1,.5,1.6); }
+  frog.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  const {d} = sideOf(ag, vg); frog.position.copy(vg.position); frog.rotation.y = Math.atan2(d.x, d.z); scene.add(frog);
+  quip('Ribbit!');
+  for (let i=0;i<3;i++){
+    const p0 = frog.position.clone(); sfx.ribbit();
+    await tween(320, k => { frog.position.copy(p0).addScaledVector(d, .35*k); frog.position.y = Math.sin(k*Math.PI)*.25; }, linear);
+  }
+  await tween(300, k => frog.scale.setScalar(1-k));
+  scene.remove(frog); green.dispose(); white.dispose(); black.dispose();
+}
+SPELL.swirl = async (ag, vg) => {
+  const c = chest(vg); sfx.charge(); let last = 0;
+  await tween(500, k => { if (k-last>.05){ last = k; const a = k*Math.PI*6;
+    burst(c.clone().add(new V3(Math.cos(a)*.35, (k-.5)*.4, Math.sin(a)*.35)), {n:3, color:0x7dff4a, speed:.2, size:.03, life:.4, grav:0}); } }, linear);
+};
+Object.assign(FINISHERS, {
+  blackknight: (ag,vg) => blackKnight(ag, vg),
+  halve: (ag,vg) => strike(ag, vg, ag.userData.type==='b' ? '2H_Melee_Attack_Slice' : '1H_Melee_Attack_Slice_Horizontal', () => halve(vg, ag)),
+  gobble: (ag,vg) => gobble(ag, vg),
+  frog: (ag,vg) => strike(ag, vg, 'Spellcast_Long', () => toFrog(vg, ag), () => SPELL.swirl(ag, vg)),
+});
+// matchup specials and how often they happen
+const SPECIALS = {nn:['blackknight',1], rp:['gobble',.6], rn:['gobble',.6], rb:['gobble',.6], rq:['gobble',.6],
+  qp:['frog',.7], qn:['frog',.4], qb:['frog',.3], bn:['halve',.5], bp:['halve',.5], np:['halve',.3], nb:['halve',.3], kp:['halve',.25]};
+
 async function battle(ag, ap, vg, vp, vpos, dest){
   // fade every other piece so nothing blocks the close-up camera
   const others = piecesGroup.children.filter(o => o!==ag && o!==vg);
@@ -1004,9 +1126,10 @@ async function battle(ag, ap, vg, vp, vpos, dest){
   await Promise.all([camTo(cpos, mid.clone().setY(.5), 700), tween(350,dim), morph(ag,true), morph(vg,true)]);
   await Promise.all([walk(ag,stop), face(vg, angleTo(vpos,stop), 300)]);
   await face(ag, angleTo(ag.position,vpos), 150);
-  const rounds = ap.t===vp.t ? 2 : 1;               // rivals of the same rank trade extra blows
+  const sp = SPECIALS[ap.t+vp.t], fin = sp && Math.random()<sp[1] ? sp[0] : choose(ARSENAL[ap.t].fins);
+  const rounds = ap.t===vp.t && fin!=='blackknight' ? 2 : 1;   // rivals of the same rank trade extra blows
   for (let i=0;i<rounds;i++){ await attack(ag,vg); await wait(80); await attack(vg,ag); await wait(80); }
-  await FINISHERS[choose(ARSENAL[ap.t].fins)](ag, vg);
+  await FINISHERS[fin](ag, vg);
   piecesGroup.remove(vg);
   if (ap.t==='p') await once(ag,'Cheer',{speed:1.5, maxMs:1100});
   await Promise.all([walk(ag,dest), camHome(800), tween(400, k => dim(1-k)).then(() => others.forEach(solid))]);
@@ -1215,6 +1338,7 @@ function loop(now){
     tw.fn(tw.ease(k));
     if (k>=1){ tweens.splice(i,1); tw.res(); }
   }
+  updateDebris(Math.min(.1, raw));
   for (let i=parts.length-1; i>=0; i--){
     const p = parts[i]; p.age += dt;
     if (p.age>=p.life){ scene.remove(p.m); p.m.material.dispose(); parts.splice(i,1); continue; }
