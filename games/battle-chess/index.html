@@ -321,7 +321,7 @@ const boardGroup = new THREE.Group(); scene.add(boardGroup);
 const sqGeo = new THREE.BoxGeometry(1,.12,1);
 for (let sq=0; sq<64; sq++){
   const lightSq = (F(sq)+R(sq))%2===1, k = (F(sq)*3+R(sq)*5)%4;
-  const m = new THREE.Mesh(sqGeo, new THREE.MeshStandardMaterial({map:(lightSq?lightTex:darkTex)[k], roughness:.3, metalness:.05}));
+  const m = new THREE.Mesh(sqGeo, new THREE.MeshStandardMaterial({map:(lightSq?lightTex:darkTex)[k], roughness:.5, metalness:.02}));
   const p = sqPos(sq); m.position.set(p.x,-.06,p.z); m.receiveShadow = true; m.userData.sq = sq; boardGroup.add(m);
 }
 const frame = new THREE.Mesh(new THREE.BoxGeometry(9,.4,9), new THREE.MeshStandardMaterial({color:0x231d14, roughness:.85}));
@@ -352,121 +352,190 @@ function flat(g,m,sq,y){ const x=new THREE.Mesh(g,m); x.rotation.x=-Math.PI/2; c
 
 /* =========================== PIECES =========================== */
 const SIDE = {
-  w:{robe:0x2e4fd6, dark:0x1a2a78, stone:0x8190b0, horse:0xeae6dc, glow:0x8fc0ff},
-  b:{robe:0xc8284c, dark:0x6c0f25, stone:0xa98282, horse:0x4b3526, glow:0xff8a6a},
+  w:{robe:0x2e4fd6, dark:0x1a2a78, light:0x9db8ff, stone:0x8a93a8, glow:0x8fc0ff, hair:0xe0b44a},
+  b:{robe:0xc8284c, dark:0x6c0f25, light:0xff9fb2, stone:0xa08a84, glow:0xff8a6a, hair:0x5a3218},
 };
-const mat = (color,o={}) => new THREE.MeshStandardMaterial({color, roughness:o.r??.6, metalness:o.m??.05, emissive:o.e??0x000000, emissiveIntensity:o.ei??1, side:o.side??THREE.FrontSide});
+const DS = THREE.DoubleSide;
+const mat = (color,o={}) => new THREE.MeshStandardMaterial({color, roughness:o.r??.6, metalness:o.m??.05, emissive:o.e??0x000000, emissiveIntensity:o.ei??1, side:o.side??THREE.FrontSide, flatShading:!!o.flat});
 const mk = (g,m) => new THREE.Mesh(g,m);
-const sph = (r,m) => mk(new THREE.SphereGeometry(r,16,12),m);
+const sph = (r,m,w=14,h=10) => mk(new THREE.SphereGeometry(r,w,h),m);
 const hemi = (r,m) => mk(new THREE.SphereGeometry(r,16,8,0,Math.PI*2,0,Math.PI/2),m);
-const cyl = (rt,rb,h,m,seg=16,open=false) => mk(new THREE.CylinderGeometry(rt,rb,h,seg,1,open),m);
+const cyl = (rt,rb,h,m,seg=14,open=false) => mk(new THREE.CylinderGeometry(rt,rb,h,seg,1,open),m);
 const box = (w,h,d,m) => mk(new THREE.BoxGeometry(w,h,d),m);
 const cone = (r,h,m,seg=12) => mk(new THREE.ConeGeometry(r,h,seg),m);
 const torus = (r,t,m,arc=Math.PI*2) => mk(new THREE.TorusGeometry(r,t,8,24,arc),m);
 const lathe = (pts,m) => mk(new THREE.LatheGeometry(pts.map(([x,y])=>new THREE.Vector2(x,y)),24),m);
+const rock = (r,m) => mk(new THREE.DodecahedronGeometry(r,0),m);
+const cape = (rt,rb,h,m) => mk(new THREE.CylinderGeometry(rt,rb,h,16,1,true,Math.PI/2+.35,Math.PI-.7),m);
+const at = (m,x,y,z,p) => { m.position.set(x,y,z); p.add(m); return m; };
+const flatRing = m => { m.rotation.x = Math.PI/2; return m; };
+const tiny = m => { m.userData.ns = true; return m; };
+
+function addFace(head, r, skin, o={}){
+  const white = mat(0xffffff,{r:.4}), pupil = mat(o.eye??0x1d2a4a,{r:.3}), brow = mat(o.brow??0x4a2e1a,{r:.9}), lip = mat(o.lip??0xa4473f,{r:.7});
+  for (const s of [-1,1]){
+    tiny(at(sph(r*.2,white,10,8),s*r*.36,r*.12,r*.83,head)).scale.z = .6;
+    tiny(at(sph(r*.1,pupil,8,6),s*r*.36,r*.12,r*.96,head));
+    tiny(at(box(r*.42,r*.09,r*.1,brow),s*r*.36,r*.36,r*.88,head)).rotation.z = o.angry ? s*.3 : 0;
+    tiny(at(sph(r*.18,skin,8,6),s*r*.97,0,0,head)).scale.set(.5,1,.8);
+  }
+  tiny(at(cone(r*.13,r*.32,skin,8),0,-r*.05,r*1.02,head)).rotation.x = Math.PI/2;
+  tiny(at(box(r*.42,r*.07,r*.08,lip),0,-r*.42,r*.86,head));
+}
+function rigArms(body, U, o){
+  const arm = new THREE.Group(), larm = new THREE.Group(), wrist = new THREE.Group(), lwrist = new THREE.Group();
+  for (const [g,w,s] of [[arm,wrist,1],[larm,lwrist,-1]]){
+    g.position.set(s*o.sx,o.sy,0); body.add(g);
+    at(cyl(o.ar,o.ar*.9,o.ua,o.sleeve,10),0,-o.ua/2,0,g);
+    at(sph(o.ar*1.05,o.sleeve,10,8),0,-o.ua,0,g);
+    at(cyl(o.ar*.85,o.ar*.8,o.fa,o.fsleeve??o.sleeve,10),0,-o.ua,o.fa/2,g).rotation.x = Math.PI/2;
+    at(sph(o.ar*.95,o.hand,10,8),0,-o.ua,o.fa+o.ar*.5,g);
+    w.position.set(0,-o.ua,o.fa+o.ar*.5); g.add(w);
+    if (o.shoulder) at(sph(o.ar*1.7,o.shoulder,12,8),0,0,0,g).scale.y = .8;
+  }
+  Object.assign(U, {arm, larm, wrist, lwrist});
+}
+function rigLegs(body, U, o){
+  U.legs = [];
+  for (const s of [-1,1]){
+    const L = new THREE.Group(); L.position.set(s*o.hx,o.hip,0); body.add(L);
+    at(cyl(o.lr,o.lr*.85,o.hip-.05,o.pants,10),0,-(o.hip-.05)/2,0,L);
+    at(box(o.lr*2.2,.07,o.lr*3.4,o.boot),0,-o.hip+.035,o.lr*.6,L);
+    if (o.knee) at(sph(o.lr*1.25,o.knee,10,8),0,-o.hip*.5,o.lr*.3,L);
+    U.legs.push(L);
+  }
+}
+const goldMat = (o={}) => mat(0xe8bb45,Object.assign({r:.4,m:.4},o));
 
 function build(t,c){
   const S = SIDE[c];
-  const g = new THREE.Group(), body = new THREE.Group(), arm = new THREE.Group();
-  g.add(body); body.add(arm);
-  const U = {body, arm, h:1, type:t, color:c};
-  const robe=mat(S.robe), dark=mat(S.dark), gold=mat(0xe8bb45,{r:.4,m:.4}), skin=mat(0xf0c8a0,{r:.8}),
-        steel=mat(0xd4dae4,{r:.35,m:.4}), wood=mat(0x6b4526,{r:.9}), white=mat(0xf1ece0,{r:.9});
-  const add = (m,x=0,y=0,z=0,p=body) => { m.position.set(x,y,z); p.add(m); return m; };
-  const flatRing = m => { m.rotation.x = Math.PI/2; return m; };
+  const g = new THREE.Group(), body = new THREE.Group(), head = new THREE.Group();
+  g.add(body); body.add(head);
+  const U = {body, head, h:1, type:t, color:c};
+  const robe=mat(S.robe), dark=mat(S.dark), gold=goldMat(), skin=mat(0xf0c8a0,{r:.8}),
+        steel=mat(0xd4dae4,{r:.35,m:.4}), wood=mat(0x6b4526,{r:.9}), white=mat(0xf1ece0,{r:.9}), leather=mat(0x5a3a22,{r:.85});
   switch (t){
-    case 'p': {
-      add(lathe([[0,0],[.25,0],[.25,.05],[.19,.1],[.16,.32],[.12,.48],[.09,.54],[0,.56]],robe));
-      flatRing(add(torus(.155,.022,gold),0,.3,0));
-      add(sph(.1,skin),0,.65,0);
-      add(hemi(.112,steel),0,.66,0);
-      add(cyl(.13,.13,.012,steel),0,.66,0);
-      arm.position.set(.2,.42,.05);
-      add(cyl(.016,.016,.95,wood,8),0,.22,0,arm);
-      add(cone(.04,.13,steel),0,.76,0,arm);
-      flatRing(add(cyl(.14,.14,.03,dark,20),-.2,.34,.1));
-      add(sph(.035,gold),-.2,.34,.12);
-      U.h = .78; break;
+    case 'p': { // foot soldier: kettle helmet, mail shirt, spear and round shield
+      const mail = mat(0x9aa3ad,{r:.5,m:.35});
+      rigLegs(body,U,{hip:.3,hx:.065,lr:.042,pants:dark,boot:leather});
+      at(lathe([[0,.2],[.15,.2],[.14,.32],[.15,.46],[.16,.56],[.11,.63],[0,.64]],mail),0,0,0,body);
+      at(lathe([[.19,.16],[.165,.3],[.152,.42]],mat(S.robe,{side:DS})),0,0,0,body);
+      at(box(.15,.2,.015,robe),0,.5,.148,body);
+      at(box(.04,.04,.017,gold),0,.52,.157,body).rotation.z = Math.PI/4;
+      flatRing(at(torus(.152,.02,leather),0,.42,0,body));
+      rigArms(body,U,{sx:.19,sy:.57,ar:.035,ua:.16,fa:.14,sleeve:mail,hand:skin,shoulder:robe});
+      at(cyl(.04,.045,.06,skin),0,.66,0,body);
+      head.position.y = .76; at(sph(.09,skin),0,0,0,head); addFace(head,.09,skin,{angry:true});
+      at(hemi(.097,steel),0,.05,0,head); at(cyl(.13,.13,.012,steel),0,.05,0,head);
+      at(cyl(.014,.014,1.0,wood,8),0,.25,0,U.wrist); at(cone(.035,.13,steel),0,.81,0,U.wrist);
+      flatRing(at(cyl(.13,.13,.025,robe,20),0,.02,.03,U.lwrist));
+      at(torus(.13,.012,gold),0,.02,.045,U.lwrist); at(sph(.03,gold),0,.02,.05,U.lwrist);
+      U.h = .9; break;
     }
-    case 'n': {
-      const hm = mat(S.horse,{r:.7});
-      add(sph(.2,hm),0,.5,0).scale.set(.85,.85,1.55);
-      for (const [x,z] of [[.09,.2],[-.09,.2],[.09,-.2],[-.09,-.2]]) add(cyl(.035,.03,.42,hm,8),x,.21,z);
-      add(cyl(.065,.085,.34,hm,10),0,.72,.26).rotation.x = .55;
-      add(box(.12,.13,.27,hm),0,.87,.4).rotation.x = .35;
-      add(box(.03,.14,.2,dark),0,.83,.24).rotation.x = .55;
-      add(cyl(.02,.04,.25,dark,6),0,.5,-.34).rotation.x = -.6;
-      add(box(.36,.16,.46,robe),0,.52,0);
-      add(lathe([[0,0],[.13,0],[.11,.22],[.08,.3],[0,.32]],robe),0,.62,-.02);
-      add(sph(.085,skin),0,1.0,-.02);
-      add(hemi(.095,steel),0,1.01,-.02);
-      add(cone(.035,.16,dark),0,1.15,-.02);
-      arm.position.set(.14,.86,0);
-      add(box(.035,.5,.012,steel),0,.3,0,arm);
-      add(box(.14,.025,.035,gold),0,.05,0,arm);
-      add(cyl(.015,.015,.1,wood,6),0,0,0,arm);
-      U.h = 1.1; break;
+    case 'n': { // armoured knight on foot: great helm with plume, sword, kite shield
+      const plate = mat(0xc3cbd6,{r:.3,m:.55}), slit = mat(0x111114,{r:.6});
+      rigLegs(body,U,{hip:.36,hx:.075,lr:.05,pants:plate,boot:plate,knee:plate});
+      at(lathe([[0,.3],[.16,.3],[.155,.42],[.185,.58],[.2,.67],[.14,.75],[0,.76]],plate),0,0,0,body);
+      at(lathe([[.21,.2],[.18,.34],[.165,.44]],mat(S.robe,{side:DS})),0,0,0,body);
+      at(box(.2,.26,.02,robe),0,.56,.19,body);
+      at(box(.05,.16,.022,gold),0,.57,.2,body); at(box(.13,.04,.022,gold),0,.6,.2,body);
+      flatRing(at(torus(.165,.022,leather),0,.44,0,body));
+      at(cape(.17,.27,.55,mat(S.dark,{side:DS})),0,.5,-.01,body);
+      rigArms(body,U,{sx:.23,sy:.68,ar:.042,ua:.18,fa:.16,sleeve:plate,hand:mat(0x2a2a30,{r:.6,m:.4}),shoulder:plate});
+      at(cyl(.08,.1,.06,plate),0,.78,0,body);
+      head.position.y = .9;
+      at(cyl(.1,.1,.17,plate),0,0,0,head); at(hemi(.1,plate),0,.085,0,head);
+      at(box(.15,.018,.02,slit),0,.02,.095,head); at(box(.018,.07,.02,slit),0,-.03,.095,head);
+      at(sph(.05,robe),0,.2,0,head); at(sph(.045,robe),0,.21,-.07,head); at(sph(.038,robe),0,.18,-.13,head); at(sph(.03,robe),0,.13,-.17,head);
+      at(box(.035,.55,.01,steel),0,.33,0,U.wrist); at(box(.16,.025,.035,gold),0,.05,0,U.wrist);
+      at(cyl(.015,.015,.1,leather,6),0,-.01,0,U.wrist); at(sph(.025,gold),0,-.07,0,U.wrist);
+      const ks = new THREE.Shape(); ks.moveTo(-.11,.11); ks.lineTo(.11,.11); ks.lineTo(.11,-.02);
+      ks.quadraticCurveTo(.1,-.13,0,-.21); ks.quadraticCurveTo(-.1,-.13,-.11,-.02); ks.closePath();
+      at(mk(new THREE.ExtrudeGeometry(ks,{depth:.025,bevelEnabled:false}),robe),0,.02,.02,U.lwrist);
+      at(box(.03,.22,.01,gold),0,0,.05,U.lwrist); at(box(.16,.03,.01,gold),0,.05,.05,U.lwrist);
+      U.h = 1.08; break;
     }
-    case 'b': {
-      add(lathe([[0,0],[.26,0],[.26,.05],[.2,.12],[.16,.45],[.12,.7],[.09,.8],[0,.82]],robe));
-      flatRing(add(torus(.105,.03,white),0,.76,0));
-      add(sph(.095,skin),0,.9,0);
-      add(cyl(.05,.1,.26,white),0,1.08,0);
-      add(cone(.05,.08,white),0,1.25,0);
-      flatRing(add(torus(.098,.012,gold),0,.97,0));
-      arm.position.set(.22,.52,.05);
-      add(cyl(.018,.018,1.1,gold,8),0,.2,0,arm);
-      add(torus(.07,.016,gold,Math.PI*1.3),-.07,.75,0,arm);
+    case 'b': { // bishop: mitre, white beard, surplice, gold crozier
+      at(lathe([[0,0],[.26,0],[.26,.04],[.22,.15],[.19,.38],[.17,.6],[.18,.68],[.12,.76],[0,.77]],robe),0,0,0,body);
+      at(lathe([[.225,.22],[.2,.42],[.19,.6]],mat(0xf1ece0,{r:.9,side:DS})),0,0,0,body);
+      for (const x of [-.055,.055]) at(box(.045,.46,.012,gold),x,.42,.198,body).rotation.x = -.04;
+      at(cyl(.12,.215,.16,mat(S.dark,{side:DS}),16,true),0,.68,0,body);
+      rigArms(body,U,{sx:.2,sy:.68,ar:.04,ua:.17,fa:.14,sleeve:robe,fsleeve:white,hand:skin});
+      at(cyl(.04,.045,.06,skin),0,.79,0,body);
+      head.position.y = .88; at(sph(.09,skin),0,0,0,head); addFace(head,.09,skin,{brow:0xdddddd});
+      at(cone(.065,.13,white,10),0,-.085,.045,head).rotation.x = Math.PI;
+      at(cyl(.055,.093,.22,white),0,.15,0,head); at(cone(.055,.08,white),0,.3,0,head);
+      flatRing(at(torus(.09,.012,gold),0,.05,0,head));
+      at(box(.02,.2,.012,gold),0,.15,.077,head).rotation.x = -.17;
+      at(box(.012,.07,.012,gold),0,.37,0,head); at(box(.045,.012,.012,gold),0,.38,0,head);
+      at(cyl(.016,.016,1.15,gold,8),0,.3,0,U.wrist); at(torus(.07,.016,gold,Math.PI*1.3),-.07,.875,0,U.wrist);
       U.h = 1.2; break;
     }
-    case 'r': {
-      const st = mat(S.stone,{r:.95});
-      add(cyl(.24,.3,.72,st),0,.36,0);
-      add(cyl(.27,.27,.08,st),0,.72,0);
-      for (let i=0;i<4;i++){ const a=i*Math.PI/2+Math.PI/4; add(box(.13,.13,.13,st),Math.sin(a)*.2,.82,Math.cos(a)*.2).rotation.y=a; }
-      const eye = mat(S.glow,{e:S.glow,ei:1.5});
-      add(sph(.035,eye),.08,.56,.26); add(sph(.035,eye),-.08,.56,.26);
-      add(box(.2,.03,.05,mat(0x1a1a1a)),0,.46,.27);
-      const arm2 = new THREE.Group(); body.add(arm2);
-      arm.position.set(.32,.58,0); arm2.position.set(-.32,.58,0);
-      for (const a of [arm,arm2]){ add(box(.13,.42,.13,st),0,-.17,0,a); add(box(.18,.16,.18,st),0,-.42,0,a); }
-      U.arm2 = arm2; U.h = .9; break;
+    case 'r': { // rock golem with a castle-tower crown
+      const st = mat(S.stone,{r:.95,flat:true}), st2 = mat(new THREE.Color(S.stone).multiplyScalar(.72).getHex(),{r:1,flat:true}), eye = mat(S.glow,{e:S.glow,ei:1.6});
+      rigLegs(body,U,{hip:.3,hx:.12,lr:.075,pants:st2,boot:st});
+      at(rock(.17,st2),0,.33,0,body).scale.set(1.25,.7,1);
+      at(rock(.3,st),0,.6,0,body).scale.set(1,1,.8);
+      at(rock(.12,st2),.13,.78,.1,body); at(rock(.1,st2),-.16,.46,.15,body); at(rock(.11,st2),.06,.44,-.2,body);
+      head.position.y = .92; at(rock(.15,st),0,0,0,head);
+      for (let i=0;i<4;i++){ const a=i*Math.PI/2+Math.PI/4; at(box(.07,.07,.07,st),Math.sin(a)*.1,.13,Math.cos(a)*.1,head).rotation.y = a; }
+      tiny(at(sph(.03,eye),.055,.02,.125,head)); tiny(at(sph(.03,eye),-.055,.02,.125,head));
+      at(box(.17,.035,.05,st2),0,.065,.11,head); tiny(at(box(.1,.02,.02,mat(0x151515)),0,-.055,.13,head));
+      U.arm = new THREE.Group(); U.larm = new THREE.Group();
+      for (const [a,s] of [[U.arm,1],[U.larm,-1]]){
+        a.position.set(s*.33,.74,0); body.add(a);
+        at(rock(.11,st),0,-.08,0,a); at(rock(.09,st2),0,-.26,.02,a); at(rock(.12,st),0,-.44,.04,a);
+      }
+      U.h = 1.0; break;
     }
-    case 'q': {
-      add(lathe([[0,0],[.3,0],[.3,.04],[.22,.2],[.15,.45],[.11,.62],[.13,.7],[.08,.8],[0,.82]],robe));
-      flatRing(add(torus(.12,.025,gold),0,.7,0));
-      add(sph(.1,skin),0,.92,0);
-      add(sph(.105,mat(0xd9a23a,{r:.8})),0,.94,-.03);
-      add(cyl(.085,.07,.08,mat(0xe2b33c,{r:.4,m:.4,side:THREE.DoubleSide}),16,true),0,1.03,0);
-      for (let i=0;i<5;i++){ const a=i/5*Math.PI*2; add(cone(.02,.07,gold,6),Math.sin(a)*.08,1.1,Math.cos(a)*.08); }
-      add(sph(.025,mat(S.glow,{e:S.glow})),0,1.03,.085);
-      arm.position.set(.2,.62,.05);
-      add(cyl(.012,.012,.42,gold,6),0,.16,0,arm);
-      U.tip = add(sph(.045,mat(S.glow,{e:S.glow,ei:1.2})),0,.39,0,arm);
-      U.h = 1.1; break;
+    case 'q': { // sorceress queen: gown, cape, flowing hair, crown, magic wand
+      at(lathe([[0,0],[.3,0],[.3,.04],[.24,.15],[.17,.38],[.12,.55],[.13,.62],[.145,.68],[.1,.75],[0,.76]],robe),0,0,0,body);
+      flatRing(at(torus(.29,.02,gold),0,.04,0,body)); flatRing(at(torus(.122,.016,gold),0,.55,0,body));
+      at(box(.07,.12,.01,gold),0,.64,.135,body);
+      at(cape(.13,.31,.7,mat(S.dark,{side:DS})),0,.39,-.01,body);
+      rigArms(body,U,{sx:.16,sy:.69,ar:.03,ua:.15,fa:.13,sleeve:robe,fsleeve:skin,hand:skin,shoulder:mat(S.light)});
+      at(cyl(.034,.04,.07,skin),0,.78,0,body);
+      flatRing(at(torus(.05,.008,gold),0,.765,0,body)); tiny(at(sph(.018,mat(S.glow,{e:S.glow})),0,.745,.05,body));
+      head.position.y = .88; at(sph(.085,skin),0,0,0,head); addFace(head,.085,skin,{lip:0xc2304a,brow:0x6a4a2a,eye:0x2a4a8a});
+      const hair = mat(S.hair,{r:.8});
+      at(sph(.095,hair),0,.015,-.022,head); at(cyl(.07,.1,.26,hair),0,-.14,-.05,head);
+      at(cyl(.095,.09,.08,goldMat({side:DS}),16,true),0,.1,0,head);
+      for (let i=0;i<5;i++){ const a=i/5*Math.PI*2; at(cone(.02,.07,gold,6),Math.sin(a)*.092,.17,Math.cos(a)*.092,head); }
+      tiny(at(sph(.022,mat(S.glow,{e:S.glow})),0,.1,.097,head));
+      at(cyl(.01,.012,.36,gold,6),0,.1,0,U.wrist); flatRing(at(torus(.03,.008,gold),0,.27,0,U.wrist));
+      U.tip = at(sph(.04,mat(S.glow,{e:S.glow,ei:1.2})),0,.31,0,U.wrist);
+      U.h = 1.12; break;
     }
-    case 'k': {
-      add(lathe([[0,0],[.31,0],[.31,.05],[.23,.2],[.18,.55],[.14,.76],[.1,.86],[0,.88]],robe));
-      flatRing(add(torus(.14,.045,white),0,.82,0));
-      add(sph(.11,skin),0,.99,0);
-      add(cone(.075,.16,mat(0xe9e4d8,{r:1}),10),0,.92,.05).rotation.x = Math.PI;
-      add(sph(.09,dark),0,1.12,0);
-      add(cyl(.1,.09,.12,mat(0xe2b33c,{r:.4,m:.4,side:THREE.DoubleSide}),16,true),0,1.12,0);
-      for (let i=0;i<4;i++){ const a=i/4*Math.PI*2; add(cone(.025,.09,gold,6),Math.sin(a)*.095,1.22,Math.cos(a)*.095); }
-      add(box(.02,.1,.02,gold),0,1.3,0); add(box(.07,.02,.02,gold),0,1.31,0);
-      arm.position.set(.23,.64,.05);
-      add(box(.04,.62,.012,steel),0,.36,0,arm);
-      add(box(.18,.03,.04,gold),0,.05,0,arm);
-      add(cyl(.016,.016,.12,wood,6),0,-.02,0,arm);
-      add(sph(.028,gold),0,-.09,0,arm);
+    case 'k': { // king: crown, great beard, ermine cape, broadsword
+      at(lathe([[0,0],[.31,0],[.31,.05],[.25,.18],[.22,.38],[.235,.5],[.2,.66],[.13,.8],[0,.81]],robe),0,0,0,body);
+      flatRing(at(torus(.232,.025,gold),0,.5,0,body)); at(box(.07,.06,.02,gold),0,.5,.255,body);
+      at(cape(.2,.36,.8,mat(S.dark,{side:DS})),0,.42,-.01,body);
+      flatRing(at(torus(.16,.05,white),0,.79,0,body));
+      const spot = mat(0x111111);
+      for (let i=0;i<6;i++){ const a=i/6*Math.PI*2; tiny(at(sph(.014,spot),Math.sin(a)*.16,.835,Math.cos(a)*.16,body)); }
+      rigArms(body,U,{sx:.24,sy:.72,ar:.045,ua:.17,fa:.15,sleeve:robe,hand:skin,shoulder:white});
+      head.position.y = .95; at(sph(.1,skin),0,0,0,head); addFace(head,.1,skin,{brow:0xeeeeee,angry:true});
+      const bw = mat(0xece8de,{r:1});
+      at(sph(.085,bw),0,-.085,.04,head).scale.set(1,1.25,.8);
+      at(box(.12,.022,.03,bw),0,-.035,.093,head);
+      for (const s of [-1,1]) at(sph(.04,bw),s*.08,0,-.03,head);
+      at(sph(.088,dark),0,.08,0,head);
+      at(cyl(.105,.095,.12,goldMat({side:DS}),16,true),0,.09,0,head);
+      for (let i=0;i<4;i++){ const a=i/4*Math.PI*2;
+        at(cone(.025,.09,gold,6),Math.sin(a)*.1,.19,Math.cos(a)*.1,head);
+        tiny(at(sph(.016,mat(i%2?0x2a6cff:0xe0203a,{r:.2})),Math.sin(a)*.104,.09,Math.cos(a)*.104,head)); }
+      at(box(.02,.1,.02,gold),0,.27,0,head); at(box(.07,.02,.02,gold),0,.28,0,head);
+      at(box(.04,.62,.012,steel),0,.36,0,U.wrist); at(box(.18,.03,.04,gold),0,.05,0,U.wrist);
+      at(cyl(.016,.016,.12,leather,6),0,-.02,0,U.wrist); at(sph(.028,gold),0,-.09,0,U.wrist);
       U.h = 1.3; break;
     }
   }
+  if (!U.wrist){ U.wrist = new THREE.Group(); U.arm.add(U.wrist); }
   const mats = new Set();
-  g.traverse(o => { if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; mats.add(o.material); } });
+  g.traverse(o => { if (o.isMesh){ o.castShadow = !o.userData.ns; o.receiveShadow = true; mats.add(o.material); } });
   U.mats = [...mats];
   U.mats.forEach(m => { m.userData.e0 = m.emissive.getHex(); m.userData.ei0 = m.emissiveIntensity; });
-  arm.userData.restZ = arm.position.z;
+  U.arm.userData.restZ = U.arm.position.z;
   g.userData = U;
   return g;
 }
@@ -492,12 +561,15 @@ function tween(ms, fn, ease=easeInOut){ return new Promise(res => tweens.push({t
 const wait = ms => tween(ms, ()=>{}, linear);
 
 const parts = [], pGeo = new THREE.SphereGeometry(1,6,4), orbGeo = new THREE.SphereGeometry(.09,12,8);
-function burst(pos,{n=20,color=0xffd27a,speed=2,size=.04,life=.6,grav=-4,up=1}={}){
+const rockGeo = new THREE.DodecahedronGeometry(1,0);
+function burst(pos,{n=20,color=0xffd27a,speed=2,size=.04,life=.6,grav=-4,up=1,geo=pGeo,lit=false,bounce=false}={}){
   for (let i=0;i<n;i++){
-    const m = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({color, transparent:true, depthWrite:false}));
+    const m = new THREE.Mesh(geo, lit ? new THREE.MeshStandardMaterial({color, roughness:1, flatShading:true, transparent:true})
+                                      : new THREE.MeshBasicMaterial({color, transparent:true, depthWrite:false}));
+    if (lit) m.castShadow = true;
     m.scale.setScalar(size*(.6+Math.random()*.8)); m.position.copy(pos);
     const v = new V3(Math.random()*2-1, Math.random()*up, Math.random()*2-1).normalize().multiplyScalar(speed*(.4+Math.random()*.6));
-    scene.add(m); parts.push({m, v, life:life*(.7+Math.random()*.6), age:0, grav});
+    scene.add(m); parts.push({m, v, life:life*(.7+Math.random()*.6), age:0, grav, bounce, spin: lit ? new V3(Math.random()*8-4,Math.random()*8-4,0) : null});
   }
 }
 let shake = 0;
@@ -536,21 +608,31 @@ async function walk(g, dest, {jump=false}={}){
   if (d<.01) return;
   await face(g, angleTo(start,dest), 180);
   sfx.step();
-  const ms = Math.max(420, d*330), hops = Math.max(1, Math.round(d*2.2)), body = g.userData.body;
-  const arc = jump || g.userData.type==='n';
+  const U = g.userData, body = U.body, legs = U.legs, larm = U.larm;
+  const ms = Math.max(420, d*330), hops = Math.max(2, Math.round(d*2.4));
+  const arc = jump || U.type==='n';
   await tween(ms, k => {
     g.position.lerpVectors(start,dest,k);
-    if (arc) g.position.y = Math.sin(k*Math.PI)*Math.min(1, .3+d*.25);
-    else { const s = Math.sin(k*Math.PI*hops); body.position.y = Math.abs(s)*.08; body.rotation.z = s*.08; }
+    const s = Math.sin(k*Math.PI*hops);
+    if (arc){
+      const q = Math.sin(k*Math.PI);
+      g.position.y = q*Math.min(1, .3+d*.25);
+      if (legs){ legs[0].rotation.x = -.8*q; legs[1].rotation.x = .45*q; }
+    } else if (legs){
+      legs[0].rotation.x = s*.55; legs[1].rotation.x = -s*.55; larm.rotation.x = -s*.4;
+      body.position.y = Math.abs(Math.cos(k*Math.PI*hops))*.03;
+    } else { body.position.y = Math.abs(s)*.07; body.rotation.z = s*.07; larm.rotation.x = -s*.25; }
   });
-  g.position.y = 0; body.position.y = 0; body.rotation.z = 0;
-  if (arc) sfx.step();
+  g.position.y = 0; body.position.y = 0; body.rotation.z = 0; larm.rotation.x = 0;
+  if (legs) legs.forEach(l => l.rotation.x = 0);
+  if (U.type==='r'){ shake = Math.max(shake,.05); sfx.thud(); } else if (arc) sfx.step();
 }
-function swingTo(arm, to, ms, ease){ const a = arm.rotation.x; return tween(ms, k => arm.rotation.x = a+(to-a)*k, ease); }
+function swingTo(o, to, ms, ease){ const a = o.rotation.x; return tween(ms, k => o.rotation.x = a+(to-a)*k, ease); }
+function pose(g, a, w, ms, ease){ const U = g.userData; return Promise.all([swingTo(U.arm,a,ms,ease), swingTo(U.wrist,w,ms,ease)]); }
 function rest(g, ms=220){
-  const {arm,arm2,body} = g.userData;
-  const a0=arm.rotation.x, z0=arm.position.z, zr=arm.userData.restZ, b0=body.rotation.x, a20=arm2?arm2.rotation.x:0;
-  return tween(ms, k => { arm.rotation.x=a0*(1-k); arm.position.z=z0+(zr-z0)*k; body.rotation.x=b0*(1-k); if (arm2) arm2.rotation.x=a20*(1-k); });
+  const {arm,larm,wrist,body} = g.userData;
+  const a0=arm.rotation.x, w0=wrist.rotation.x, l0=larm.rotation.x, z0=arm.position.z, zr=arm.userData.restZ, b0=body.rotation.x;
+  return tween(ms, k => { arm.rotation.x=a0*(1-k); wrist.rotation.x=w0*(1-k); larm.rotation.x=l0*(1-k); arm.position.z=z0+(zr-z0)*k; body.rotation.x=b0*(1-k); });
 }
 function knock(g, from, amt, ms=220){
   const base = g.position.clone(), dir = base.clone().sub(from.position).setY(0).normalize();
@@ -564,33 +646,104 @@ function flash(g, hex, ms=200){
   return tween(ms, k => ms_.forEach(m => m.emissiveIntensity = 1.2*(1-k)))
     .then(() => ms_.forEach(m => { m.emissive.setHex(m.userData.e0); m.emissiveIntensity = m.userData.ei0; }));
 }
+const headTop = g => new V3(g.position.x, g.position.y+g.userData.h+.05, g.position.z);
 
-/* ---- battle moves: each piece strikes in its own style ---- */
+/* ---- signature strikes: used to open a duel and for the defender's counter ---- */
 const STRIKE = {
-  async p(g){ const arm=g.userData.arm, z=arm.userData.restZ; await swingTo(arm,Math.PI/2,160); sfx.whoosh(); await tween(130,k=>arm.position.z=z+k*.32,easeIn); },
-  async n(g){ const {body,arm}=g.userData;
-    await Promise.all([tween(260,k=>body.rotation.x=-.45*k), swingTo(arm,-1.4,260)]); sfx.whoosh();
-    await Promise.all([tween(200,k=>body.rotation.x=-.45*(1-k)), swingTo(arm,1.3,200,easeIn)]); },
-  async b(g){ const arm=g.userData.arm; await swingTo(arm,-1.7,280); sfx.whoosh(); await swingTo(arm,1.2,190,easeIn); },
-  async r(g){ const arm=g.userData.arm; await swingTo(arm,-2.5,300); sfx.whoosh(); await swingTo(arm,-1.5,180,easeIn); },
-  async q(g){ const arm=g.userData.arm; await swingTo(arm,-.9,220); sfx.whoosh(); await swingTo(arm,1.1,170,easeIn); },
-  async k(g){ const arm=g.userData.arm; await swingTo(arm,-1.5,240); sfx.whoosh(); await swingTo(arm,1.35,170,easeIn); },
+  async p(g){ const arm = g.userData.arm, z = arm.userData.restZ; await pose(g,-.8,2.37,170); sfx.whoosh(); await tween(130,k=>arm.position.z=z+k*.3,easeIn); },
+  async n(g){ const b = g.userData.body; await pose(g,-2.5,-.5,260); sfx.whoosh(); await Promise.all([pose(g,-.9,2.3,170,easeIn), tween(170,k=>b.rotation.x=.18*k)]); },
+  async b(g){ await pose(g,-2.6,-.4,300); sfx.whoosh(); await pose(g,-.7,2.0,190,easeIn); },
+  async r(g){ const arm = g.userData.arm; await swingTo(arm,-2.5,300); sfx.whoosh(); await swingTo(arm,-1.5,180,easeIn); },
+  async q(g){ await pose(g,-1.3,2.85,200); const p = new V3(); g.userData.tip.getWorldPosition(p);
+    sfx.zap(); burst(p,{n:16,color:SIDE[g.userData.color].glow,speed:1.8,size:.03,life:.35,grav:0}); await wait(120); },
+  async k(g){ await pose(g,-2.5,-.6,240); sfx.whoosh(); await pose(g,-.9,2.3,170,easeIn); },
 };
 async function parry(g, from){
-  const arm = g.userData.arm, a = arm.rotation.x;
   sfx.clang(); burst(between(g,from), {n:18, color:0xffe08a, speed:2.6, size:.025, life:.35, grav:-6});
-  await Promise.all([tween(90, k => arm.rotation.x = a+(.7-a)*k), knock(g,from,.07)]);
+  await Promise.all([pose(g,-1.0,.35,90), knock(g,from,.07)]);
 }
 function hit(g, from){
   sfx.thud(); shake = .08; flash(g, 0xff2a2a, 260);
   burst(chest(g), {n:24, color:0xfff1c0, speed:2.2, size:.03, life:.45, grav:-5});
   return knock(g, from, .14, 260);
 }
+
+/* ---- finishing moves: each attacker ends the duel its own way ---- */
+const FINISH = {
+  async p(ag,vg){ // leaping spear stab
+    const arm = ag.userData.arm, z = arm.userData.restZ, p0 = ag.position.clone(), dir = vg.position.clone().sub(p0).setY(0).normalize();
+    await pose(ag,-.8,2.37,150); sfx.whoosh();
+    await Promise.all([
+      tween(260, k => { ag.position.copy(p0).addScaledVector(dir,.18*k); ag.position.y = Math.sin(k*Math.PI)*.35; }, linear),
+      tween(260, k => arm.position.z = z+k*.35, easeIn)]);
+    ag.position.y = 0; await hit(vg,ag); await rest(ag);
+    await tween(150, k => ag.position.copy(p0).addScaledVector(dir,.18*(1-k)));
+    return 'fall';
+  },
+  async n(ag,vg){ // whirlwind slash
+    await pose(ag,-1.3,2.4,180); sfx.whoosh(); const r0 = ag.rotation.y;
+    await tween(380, k => ag.rotation.y = r0+k*Math.PI*2);
+    ag.rotation.y = r0; await hit(vg,ag); await rest(ag);
+    return 'spin';
+  },
+  async b(ag,vg){ // crozier bonk on the head
+    await pose(ag,-2.8,-.3,300); sfx.whoosh(); await pose(ag,-.6,1.9,150,easeIn);
+    await hit(vg,ag); burst(headTop(vg), {n:12, color:0xfff27a, speed:1.2, size:.03, life:.6, grav:0});
+    return 'driven';
+  },
+  async k(ag,vg){ // royal slash, then a shove that sends the enemy flying
+    await STRIKE.k(ag); await hit(vg,ag); await rest(ag,150);
+    const {larm,body} = ag.userData;
+    await Promise.all([swingTo(larm,-1.5,160,easeIn), tween(160,k=>body.rotation.x=.2*k)]);
+    return 'launch';
+  },
+};
+
+/* ---- deaths: chosen by attacker, overridden by some defenders ---- */
 async function dieFall(g){
   const b = g.userData.body;
   await tween(420, k => b.rotation.x = -1.45*k, easeIn);
   sfx.thud(); burst(g.position.clone().setY(.1), {n:24, color:0x9b8f78, speed:.9, size:.06, life:.9, grav:.3, up:.4});
   await wait(250); await fadeOut(g,350);
+}
+async function dieSpin(g){
+  sfx.whoosh(); const r0 = g.rotation.y, h = g.userData.h; let last = 0;
+  await tween(900, k => {
+    g.rotation.y = r0+k*k*Math.PI*6; g.position.y = -h*.95*easeIn(k);
+    if (k-last>.08){ last = k; burst(g.position.clone().setY(.05), {n:4, color:0x9b8f78, speed:.8, size:.05, life:.6, grav:.3, up:.4}); }
+  }, linear);
+  sfx.thud();
+}
+async function dieDriven(g, ag){
+  const h = g.userData.h;
+  for (let i=0;i<3;i++){
+    if (i){ await pose(ag,-2.4,-.4,150); sfx.whoosh(); await pose(ag,-.6,1.9,100,easeIn); }
+    sfx.thud(); shake = .1;
+    const y0 = g.position.y; await tween(110, k => g.position.y = y0-h*.34*k);
+    burst(headTop(g), {n:10, color:0xfff27a, speed:1.2, size:.03, life:.5, grav:0});
+  }
+  await rest(ag);
+}
+async function dieLaunch(g, from){
+  const dir = g.position.clone().sub(from.position).setY(0).normalize(), p0 = g.position.clone(), b = g.userData.body;
+  sfx.thud(); sfx.whoosh(); shake = .15;
+  await tween(750, k => {
+    g.position.copy(p0).addScaledVector(dir,k*3.2); g.position.y = Math.sin(k*Math.PI)*1.6;
+    b.rotation.x = -k*Math.PI*3; setOpacity(g, k>.6 ? 1-(k-.6)/.4 : 1);
+  }, linear);
+}
+async function dieCrumble(g){
+  const c = chest(g); g.visible = false; sfx.crush(); shake = .18;
+  burst(c, {n:16, color:SIDE[g.userData.color].stone, speed:1.9, size:.07, life:1.6, grav:-6, up:1.2, geo:rockGeo, lit:true, bounce:true});
+  burst(c, {n:20, color:0x9b8f78, speed:.9, size:.07, life:1, grav:.3});
+  await wait(900);
+}
+async function dieSparkle(g){
+  const glow = SIDE[g.userData.color].glow; sfx.charge(); let last = 0;
+  await tween(900, k => {
+    setOpacity(g,1-k); g.position.y = k*.5;
+    if (k-last>.08){ last = k; burst(chest(g), {n:6, color:glow, speed:.6, size:.03, life:.6, grav:.6}); }
+  });
 }
 async function dieBurn(g){
   const ms = g.userData.mats, cols = ms.map(m=>m.color.clone()), black = new THREE.Color(0x151515);
@@ -598,12 +751,23 @@ async function dieBurn(g){
   let last = 0;
   await tween(650, k => {
     g.scale.setScalar(1-k*.9); setOpacity(g,1-k);
-    if (k-last>.1){ last=k; burst(chest(g), {n:5, color:0x3a3a3a, speed:.5, size:.08, life:1, grav:.8}); }
+    if (k-last>.1){ last = k; burst(chest(g), {n:5, color:0x3a3a3a, speed:.5, size:.08, life:1, grav:.8}); }
   });
 }
-async function bolt(ag, vg, kill){
-  const {arm,tip,color} = ag.userData, glow = SIDE[color].glow;
-  await swingTo(arm, 1.25, 220);
+function kill(kind, vg, ag){
+  const vt = vg.userData.type;
+  if (vt==='r') return dieCrumble(vg);                  // golems always shatter into rubble
+  if (vt==='q' && kind==='fall') return dieSparkle(vg);  // a queen fades away in her own magic
+  if (kind==='spin') return dieSpin(vg);
+  if (kind==='driven') return dieDriven(vg, ag);
+  if (kind==='launch') return dieLaunch(vg, ag);
+  if (kind==='burn') return dieBurn(vg);
+  return dieFall(vg);
+}
+
+async function bolt(ag, vg, lethal){
+  const {tip,color} = ag.userData, glow = SIDE[color].glow;
+  await pose(ag,-1.3,2.85,220);
   sfx.charge();
   await tween(320, k => tip.scale.setScalar(1+k*1.6));
   const from = new V3(); tip.getWorldPosition(from); const to = chest(vg);
@@ -612,31 +776,31 @@ async function bolt(ag, vg, kill){
   let last = 0;
   await tween(260, k => {
     orb.position.lerpVectors(from,to,k); orb.position.y += Math.sin(k*Math.PI)*.15; fxLight.position.copy(orb.position);
-    if (k-last>.12){ last=k; burst(orb.position, {n:4, color:glow, speed:.4, size:.03, life:.3, grav:0}); }
+    if (k-last>.12){ last = k; burst(orb.position, {n:4, color:glow, speed:.4, size:.03, life:.3, grav:0}); }
   }, linear);
   scene.remove(orb); orb.material.dispose();
-  if (kill){ burst(to, {n:40, color:glow, speed:2.4, size:.04, life:.7, grav:-1}); flash(vg, glow, 400); shake = .15; sfx.thud(); }
+  if (lethal){ burst(to, {n:40, color:glow, speed:2.4, size:.04, life:.7, grav:-1}); flash(vg, glow, 400); shake = .15; sfx.thud(); }
   else { burst(to, {n:18, color:glow, speed:2, size:.03, life:.4, grav:-2}); await parry(vg, ag); }
   tween(300, k => fxLight.intensity = 3*(1-k));
-  await Promise.all([rest(ag), kill ? null : rest(vg)]);
+  await Promise.all([rest(ag), lethal ? null : rest(vg)]);
 }
 async function crush(ag, vg, vpos){
-  const {arm,arm2,body} = ag.userData, start = ag.position.clone();
-  await Promise.all([swingTo(arm,-2.8,260), swingTo(arm2,-2.8,260)]);
+  const {arm,larm,body} = ag.userData, start = ag.position.clone();
+  await Promise.all([swingTo(arm,-2.8,260), swingTo(larm,-2.8,260)]);
   sfx.whoosh();
   await tween(480, k => { ag.position.lerpVectors(start,vpos,k); ag.position.y = Math.sin(k*Math.PI)*.95; }, linear);
   ag.position.y = 0;
   sfx.crush(); shake = .28;
   burst(vpos.clone().setY(.1), {n:40, color:0x9b8f78, speed:1.6, size:.07, life:1, grav:.2, up:.5});
+  if (vg.userData.type==='r') burst(vpos.clone().setY(.3), {n:14, color:SIDE[vg.userData.color].stone, speed:1.8, size:.07, life:1.5, grav:-6, up:1, geo:rockGeo, lit:true, bounce:true});
   await Promise.all([tween(110, k => vg.scale.set(1+.4*k, 1-.92*k, 1+.4*k)), tween(160, k => body.position.y = -.08*Math.sin(k*Math.PI))]);
   await Promise.all([rest(ag,300), fadeOut(vg,300)]);
 }
-async function melee(ag, ap, vg, vp){
+async function exchange(ag, ap, vg, vp){
   await STRIKE[ap.t](ag); await parry(vg,ag); await Promise.all([rest(ag),rest(vg)]);
-  await wait(100);
+  await wait(90);
   await STRIKE[vp.t](vg); await parry(ag,vg); await Promise.all([rest(ag),rest(vg)]);
-  await wait(80);
-  await STRIKE[ap.t](ag); await hit(vg,ag); await rest(ag);
+  await wait(70);
 }
 
 async function battle(ag, ap, vg, vp, vpos, dest){
@@ -649,12 +813,21 @@ async function battle(ag, ap, vg, vp, vpos, dest){
   const cpos = mid.clone().addScaledVector(perp,2.5).add(new V3(0,1.3,0)).addScaledVector(camNow.normalize(),.9);
   await Promise.all([camTo(cpos, mid.clone().setY(.5), 700), walk(ag,stop), face(vg, angleTo(vpos,stop), 300)]);
   await face(ag, angleTo(ag.position,vpos), 150);
-  if (ap.t==='q'){ await bolt(ag,vg,false); await wait(150); await bolt(ag,vg,true); await dieBurn(vg); }
-  else if (ap.t==='r'){
+  if (ap.t==='q'){
+    await bolt(ag,vg,false);
+    if (vp.t==='q') await bolt(vg,ag,false);   // sorceress duel: the enemy queen fires back
+    await wait(120);
+    await bolt(ag,vg,true); await kill('burn', vg, ag);
+  } else if (ap.t==='r'){
     await STRIKE.r(ag); await parry(vg,ag); await Promise.all([rest(ag),rest(vg)]);
     await STRIKE[vp.t](vg); sfx.thud(); burst(between(ag,vg), {n:14, color:0x9b8f78, speed:1, size:.05, life:.5, grav:-2}); await rest(vg);
     await crush(ag, vg, vpos);
-  } else { await melee(ag,ap,vg,vp); await dieFall(vg); }
+  } else {
+    const rounds = ap.t===vp.t ? 2 : 1;          // same-type rivals trade extra blows
+    for (let i=0;i<rounds;i++) await exchange(ag,ap,vg,vp);
+    await kill(await FINISH[ap.t](ag,vg), vg, ag);
+  }
+  await rest(ag,150);
   piecesGroup.remove(vg);
   await Promise.all([walk(ag,dest), camHome(800)]);
 }
@@ -865,8 +1038,12 @@ function loop(now){
   for (let i=parts.length-1; i>=0; i--){
     const p = parts[i]; p.age += dt;
     if (p.age>=p.life){ scene.remove(p.m); p.m.material.dispose(); parts.splice(i,1); continue; }
-    p.v.y += p.grav*dt; p.m.position.addScaledVector(p.v, dt); p.m.material.opacity = 1-p.age/p.life;
+    p.v.y += p.grav*dt; p.m.position.addScaledVector(p.v, dt);
+    if (p.bounce && p.m.position.y<p.m.scale.y && p.v.y<0){ p.m.position.y = p.m.scale.y; p.v.y *= -.35; p.v.x *= .7; p.v.z *= .7; }
+    if (p.spin){ p.m.rotation.x += p.spin.x*dt; p.m.rotation.y += p.spin.y*dt; }
+    p.m.material.opacity = p.bounce ? Math.min(1,(p.life-p.age)/(p.life*.3)) : 1-p.age/p.life;
   }
+  for (const pg of piecesGroup.children){ const U = pg.userData; if (U.head) U.head.rotation.y = Math.sin(now/1400+U.pid*1.7)*.3; }
   if (selG && !busy) selG.userData.body.position.y = .04+Math.abs(Math.sin(now/170))*.07;
   const pose = cine || orbitPose();
   camera.position.copy(pose.pos);
