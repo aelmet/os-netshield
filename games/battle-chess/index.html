@@ -57,7 +57,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Alegreya Sans'
     <div class="caprow"><b>Red took</b><span id="capB" class="glyphs blue"></span><span id="advB" class="adv"></span></div>
   </div>
   <div id="banner" class="banner" hidden></div>
-  <p class="hint">Drag to turn the board · Scroll to zoom · Tap a piece, then a glowing square · Characters by KayKit (CC0)</p>
+  <p class="hint">Drag to turn the board · Scroll to zoom · Tap a piece, then a glowing square · Animation rig by KayKit (CC0)</p>
   <nav class="dock" aria-label="Game controls">
     <button id="newBtn" class="btn primary" type="button">New game</button>
     <button id="undoBtn" class="btn" type="button">Undo</button>
@@ -357,24 +357,36 @@ const circG = new THREE.CircleGeometry(.16,24), ringG = new THREE.RingGeometry(.
 function flat(g,m,sq,y){ const x=new THREE.Mesh(g,m); x.rotation.x=-Math.PI/2; const p=sqPos(sq); x.position.set(p.x,y,p.z); markGroup.add(x); }
 
 /* =========================== CHARACTERS =========================== */
-// Rigged, animated characters: KayKit Adventurers by Kay Lousberg (CC0).
+// Figures are built here and driven by the KayKit Adventurers skeleton, animations and props (CC0, Kay Lousberg).
 const SIDE = {
-  w:{glow:0x8fc0ff, hue:.62, base:0x2e4fd6, fire:0xff8a2a, bolt:0xaee0ff, holy:0xfff0a0, stone:[.6,.2], rock:0x8a93a8},
-  b:{glow:0xff8a6a, hue:.985, base:0xc8284c, fire:0x7dff4a, bolt:0xc070ff, holy:0xb070ff, stone:[.07,.5], rock:0xb07a50},
+  w:{robe:0x2c44c8, dark:0x16236e, light:0x9db4ff, hair:0xe3b653, glow:0x8fc0ff, hue:.62, base:0x2e4fd6, fire:0xff8a2a, bolt:0xaee0ff, holy:0xfff0a0, stone:0x8a93a8, rock:0x8a93a8},
+  b:{robe:0xd23a6e, dark:0x6e1235, light:0xffa8c8, hair:0x5a3218, glow:0xff8a6a, hue:.94, base:0xc8284c, fire:0x7dff4a, bolt:0xc070ff, holy:0xb070ff, stone:0xb07a50, rock:0xb07a50},
 };
-const MODELS = ['Knight','Mage','Barbarian','Rogue','Rogue_Hooded'];
-const HUMAN = {head:.66, leg:1.25, spine:1.08};   // longer legs, smaller heads than the chibi originals
+const MODELS = ['Knight','Mage'];
 const CAST = {
-  p:{model:'Rogue_Hooded', show:['Knife','Knife_Offhand'], height:.8, idle:'Idle', build:{head:.72, leg:1.18, spine:1.04}},
-  n:{model:'Knight', show:['Knight_Helmet','Knight_Cape','1H_Sword','Round_Shield'], height:.95, idle:'Idle'},
-  b:{model:'Mage', show:['Mage_Hat','Mage_Cape','2H_Staff'], height:.98, idle:'Idle', tip:'2H_Staff', caster:true},
-  r:{model:'Barbarian', show:[], height:1.0, idle:'Unarmed_Idle', stone:true, build:{head:.6, leg:1.12, spine:1.14}},
-  q:{model:'Rogue', show:['Rogue_Cape'], height:.98, idle:'Idle', crown:'queen', wand:true, caster:true},
-  k:{model:'Knight', show:['Knight_Cape','1H_Sword','Badge_Shield'], height:1.05, idle:'Idle', crown:'king'},
+  p:{height:.84, idle:'Idle'},
+  n:{height:.95, idle:'Idle'},
+  b:{height:1.0, idle:'Idle', caster:true},
+  r:{height:1.0, idle:'Unarmed_Idle'},
+  q:{height:1.0, idle:'Idle', caster:true},
+  k:{height:1.08, idle:'Idle'},
 };
-const BODY_PART = /_(Arm|Body|Head|Leg)/;
 const ASSET = {}, CLIPS = {};
-let HELM = null;
+// Stretch the cartoon skeleton to human proportions: longer thighs, shins and arms, shorter neck and torso.
+const STRETCH = {lowerlegl:2, lowerlegr:2, footl:2.7, footr:2.7, chest:.8, head:.75, lowerarml:1.35, lowerarmr:1.35, wristl:1.1, wristr:1.1};
+const HIP_LIFT = .227*(2-1)+.149*(2.7-1);   // extra hip height from the longer legs
+const FIG_TOP = 1.778;                        // head top of the stretched figure, in skeleton units
+function stretchRig(scene, clips){
+  scene.traverse(o => { const f = STRETCH[o.name]; if (f) o.position.multiplyScalar(f); if (o.name==='hips') o.position.y += HIP_LIFT; });
+  const done = new Set();   // clips share keyframe arrays; stretch each array only once
+  for (const clip of clips) for (const tr of clip.tracks){
+    const [node, prop] = tr.name.split('.'); if (prop!=='position' || done.has(tr.values)) continue;
+    const f = STRETCH[node], v = tr.values; done.add(v);
+    if (f) for (let i=0;i<v.length;i++) v[i] *= f;
+    // raise the hips while standing, less as the body goes down to the floor
+    if (node==='hips') for (let i=1;i<v.length;i+=3) v[i] += HIP_LIFT*Math.min(1, Math.max(0, (v[i]-.1)/.29));
+  }
+}
 
 function recolor(img, hue){
   const c = document.createElement('canvas'); c.width = c.height = 256;
@@ -382,24 +394,10 @@ function recolor(img, hue){
   const d = x.getImageData(0,0,256,256), a = d.data, col = new THREE.Color(), hsl = {};
   for (let i=0;i<a.length;i+=4){
     col.setRGB(a[i]/255, a[i+1]/255, a[i+2]/255); col.getHSL(hsl);
-    // shift cloth accent colours to the team hue; keep skin, hair, wood, gold, steel
     if (hsl.s>.18 && hsl.l>.08 && hsl.l<.93 && (hsl.h<.035 || hsl.h>.18)){
       col.setHSL(hue, Math.max(hsl.s,.6), hsl.l);
       a[i] = col.r*255; a[i+1] = col.g*255; a[i+2] = col.b*255;
     }
-  }
-  x.putImageData(d,0,0);
-  const t = new THREE.CanvasTexture(c); t.flipY = false; return t;
-}
-function recolorStone(img, [hue,sat]){
-  const c = document.createElement('canvas'); c.width = c.height = 256;
-  const x = c.getContext('2d'); x.drawImage(img,0,0,256,256);
-  const d = x.getImageData(0,0,256,256), a = d.data, col = new THREE.Color(), hsl = {};
-  for (let i=0;i<a.length;i+=4){
-    col.setRGB(a[i]/255, a[i+1]/255, a[i+2]/255); col.getHSL(hsl);
-    const l = Math.min(.85, Math.max(.12, .2+.5*hsl.l+(Math.random()-.5)*.14));
-    col.setHSL(hue+(Math.random()-.5)*.02, sat, l);
-    a[i] = col.r*255; a[i+1] = col.g*255; a[i+2] = col.b*255;
   }
   x.putImageData(d,0,0);
   const t = new THREE.CanvasTexture(c); t.flipY = false; return t;
@@ -414,45 +412,16 @@ function loadAssets(onProgress){
     else loader.load(`models/${n}.glb`, onLoad, undefined, rej);
   };
   return Promise.all(MODELS.map(n => new Promise((res,rej) => fetchModel(n, gl => {
-    const scene = gl.scene; let map = null;
-    scene.updateMatrixWorld(true);
-    const bb = new THREE.Box3();
-    scene.traverse(o => { if (o.isMesh){ if (!map && o.material.map) map = o.material.map; if (BODY_PART.test(o.name)) bb.expandByObject(o); } });
-    const hp = new V3(); scene.getObjectByName('head').getWorldPosition(hp);
+    let map = null; gl.scene.traverse(o => { if (!map && o.isMesh && o.material.map) map = o.material.map; });
     // bundled models carry their texture as an inline image; plain .glb files carry it inside
     const texSrc = window.KAYKIT_TEX && window.KAYKIT_TEX[n];
     (texSrc ? loadImage(texSrc) : Promise.resolve(map && map.image)).then(img => {
       if (!img) throw new Error(`texture missing for ${n}`);
-      ASSET[n] = {scene, top:bb.max.y, minY:bb.min.y, headY:hp.y,
-        tex:{w:recolor(img,SIDE.w.hue), b:recolor(img,SIDE.b.hue)},
-        stone: n==='Barbarian' ? {w:recolorStone(img,SIDE.w.stone), b:recolorStone(img,SIDE.b.stone)} : null};
+      ASSET[n] = {scene:gl.scene, tex:{w:recolor(img,SIDE.w.hue), b:recolor(img,SIDE.b.hue)}};
       gl.animations.forEach(a => CLIPS[a.name] = a);
       onProgress(++done/MODELS.length); res();
     }).catch(rej);
-  }, rej))));
-}
-function helmInfo(){
-  if (HELM) return HELM;
-  const hm = ASSET.Knight.scene.getObjectByName('Knight_Helmet'), m = firstMesh(hm);
-  m.geometry.computeBoundingBox(); const b = m.geometry.boundingBox;
-  HELM = {w:b.max.x-b.min.x, top:hm.position.y+b.max.y*hm.scale.y, cz:hm.position.z+(b.max.z+b.min.z)/2*hm.scale.z};
-  return HELM;
-}
-function makeCrown(kind){
-  const H = helmInfo(), r = H.w*(kind==='king'?.3:.26), gold = new THREE.MeshStandardMaterial({color:0xf2c040, roughness:.3, metalness:.6, side:THREE.DoubleSide});
-  const g = new THREE.Group(), h = r*(kind==='king'?.75:.45);
-  g.add(new THREE.Mesh(new THREE.CylinderGeometry(r,r*.92,h,20,1,true), gold));
-  const n = kind==='king' ? 5 : 7;
-  for (let i=0;i<n;i++){
-    const a = i/n*Math.PI*2, s = kind==='king' ? 1 : (i===0 ? 1.4 : .7);
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(r*.18*s,r*.55*s,6), gold);
-    sp.position.set(Math.sin(a)*r, h/2+r*.25*s, Math.cos(a)*r); g.add(sp);
-    const gem = new THREE.Mesh(new THREE.SphereGeometry(r*.1,8,6), new THREE.MeshStandardMaterial({color:i%2?0x2a6cff:0xe0203a, roughness:.2, emissive:i%2?0x0a1a55:0x550a12}));
-    gem.position.set(Math.sin(a)*r*1.01, 0, Math.cos(a)*r*1.01); g.add(gem);
-  }
-  if (kind==='king'){ const cap = new THREE.Mesh(new THREE.SphereGeometry(r*.95,16,10,0,Math.PI*2,0,Math.PI/2), new THREE.MeshStandardMaterial({color:0x7a1024, roughness:.8})); cap.position.y = h*.2; g.add(cap); }
-  g.position.set(0, H.top*(kind==='king'?.78:.82), H.cz);
-  return g;
+  }, rej)))).then(() => stretchRig(ASSET.Knight.scene, Object.values(CLIPS)));
 }
 function addTip(weapon, color){
   const m = firstMesh(weapon); if (!m) return null;
@@ -474,70 +443,196 @@ function stoneTexture(){
   stoneMap = new THREE.CanvasTexture(c); stoneMap.wrapS = stoneMap.wrapT = THREE.RepeatWrapping; stoneMap.repeat.set(3,2);
   return stoneMap;
 }
-function makeTower(c, mats){
-  const t = new THREE.Group(), M = o => { const m = new THREE.MeshStandardMaterial(o); mats.push(m); return m; };
+function makeTower(c, M){
+  const t = new THREE.Group();
   const add = (geo,mat,x,y,z) => { const m = new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.castShadow = m.receiveShadow = true; t.add(m); return m; };
-  const st = M({map:stoneTexture(), color:c==='w'?0xc4cad8:0xe0c2a8, roughness:.95});
+  const st = M(c==='w'?0xc4cad8:0xe0c2a8, {map:stoneTexture(), r:.95});
   add(new THREE.CylinderGeometry(.24,.3,.72,20),st,0,.4,0);
   add(new THREE.CylinderGeometry(.3,.27,.1,20),st,0,.8,0);
   for (let i=0;i<6;i++){ const a = i/6*Math.PI*2; add(new THREE.BoxGeometry(.11,.12,.09),st,Math.sin(a)*.24,.91,Math.cos(a)*.24).rotation.y = a; }
-  add(new THREE.BoxGeometry(.13,.22,.04),M({color:0x1a1410,roughness:1}),0,.15,.29);
-  const glow = M({color:SIDE[c].glow, emissive:SIDE[c].glow, emissiveIntensity:.8});
+  add(new THREE.BoxGeometry(.13,.22,.04),M(0x1a1410,{r:1}),0,.15,.29);
+  const glow = M(SIDE[c].glow, {e:SIDE[c].glow, ei:.8});
   for (const a of [-.9,.9]) add(new THREE.BoxGeometry(.05,.09,.03),glow,Math.sin(a)*.265,.55,Math.cos(a)*.265).rotation.y = a;
-  add(new THREE.CylinderGeometry(.01,.01,.35,6),M({color:0x5a4030}),0,1.12,0);
-  add(new THREE.BoxGeometry(.18,.11,.01),M({color:SIDE[c].base, side:THREE.DoubleSide}),.09,1.22,0);
+  add(new THREE.CylinderGeometry(.01,.01,.35,6),M(0x5a4030),0,1.12,0);
+  add(new THREE.BoxGeometry(.18,.11,.01),M(SIDE[c].base,{side:THREE.DoubleSide}),.09,1.22,0);
   return t;
 }
-function applyBuild(U){
-  const B = U.bones, P = U.build; if (!B.head) return;
-  B.hips.position.y *= P.leg;
-  B.ul.scale.setScalar(P.leg); B.ur.scale.setScalar(P.leg);
-  B.spine.scale.setScalar(P.spine); B.head.scale.setScalar(P.head/P.spine);
-}
-const baseGeo = new THREE.CylinderGeometry(.34,.37,.04,32);
 
-function build(t,c){
-  const spec = CAST[t], A = ASSET[spec.model], P = spec.build || HUMAN;
-  const g = new THREE.Group(), rig = new THREE.Group(), model = THREE.SkeletonUtils.clone(A.scene);
-  rig.add(model); g.add(rig);
-  const mats = [], tex = spec.stone ? A.stone[c] : A.tex[c];
-  model.traverse(o => {
-    if (!o.isMesh) return;
-    o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
-    o.material = o.material.clone(); o.material.map = tex;
-    if (spec.stone){ o.material.flatShading = true; o.material.roughness = 1; o.material.metalness = 0; }
-    mats.push(o.material);
-  });
-  model.traverse(o => {
-    if (!o.isMesh) return;
-    const n2 = o.parent ? o.parent.name : '';
-    if (BODY_PART.test(o.name) || BODY_PART.test(n2)) return;
-    o.visible = spec.show.includes(o.name) || spec.show.includes(n2);
-  });
-  let tip = null;
-  if (spec.crown) model.getObjectByName('head').add(makeCrown(spec.crown));
-  if (spec.wand){
-    const w = ASSET.Mage.scene.getObjectByName('1H_Wand').clone(); w.visible = true;
-    w.traverse(o => { if (o.isMesh){ o.material = o.material.clone(); o.material.map = ASSET.Mage.tex[c]; o.castShadow = true; mats.push(o.material); } });
-    model.getObjectByName('handslotr').add(w); tip = addTip(w, SIDE[c].glow);
+/* ---- figure parts, built in each bone's own frame (bones point along +Y) ---- */
+const DS = THREE.DoubleSide;
+const geoLimb = (r0,r1,len,seg=10,open=false) => new THREE.CylinderGeometry(r1,r0,len,seg,1,open);
+function put(parent, geo, mat, x=0, y=0, z=0){ const m = new THREE.Mesh(geo, mat); m.position.set(x,y,z); parent.add(m); return m; }
+const limb = (bone,len,r0,r1,mat) => put(bone, geoLimb(r0,r1,len), mat, 0, len/2, 0);
+const ball = (p,r,mat,x=0,y=0,z=0) => put(p, new THREE.SphereGeometry(r,14,10), mat, x, y, z);
+const lathe = (p,pts,mat,sz=1,y=0) => { const m = put(p, new THREE.LatheGeometry(pts.map(([x,yy])=>new THREE.Vector2(x,yy)),28), mat, 0, y, 0); m.scale.z = sz; return m; };
+const boxAt = (p,w,h,d,mat,x,y,z) => put(p, new THREE.BoxGeometry(w,h,d), mat, x, y, z);
+const coneAt = (p,r,h,mat,x,y,z,seg=12) => put(p, new THREE.ConeGeometry(r,h,seg), mat, x, y, z);
+const ring = (p,r,t,mat,y,sz=1) => { const m = put(p, new THREE.TorusGeometry(r,t,8,28), mat, 0, y, 0); m.rotation.x = Math.PI/2; m.scale.y = sz; return m; };
+const capeGeo = (rt,rb,h) => new THREE.CylinderGeometry(rt,rb,h,18,1,true,Math.PI/2+.3,Math.PI-.6);
+const tiny = m => { m.userData.ns = true; return m; };
+
+function addFace(head, r, M, skin, o={}){
+  const white = M(0xffffff,{r:.4}), pupil = M(o.eye??0x1d2a4a,{r:.3}), brow = M(o.brow??0x4a2e1a,{r:.9}), lip = M(o.lip??0xa4473f,{r:.7});
+  for (const s of [-1,1]){
+    tiny(ball(head,r*.18,white,s*r*.36,r*.1,r*.84)).scale.z = .6;
+    tiny(ball(head,r*.09,pupil,s*r*.36,r*.1,r*.95));
+    tiny(boxAt(head,r*.4,r*.08,r*.1,brow,s*r*.36,r*.33,r*.88)).rotation.z = o.angry ? s*.3 : 0;
+    tiny(ball(head,r*.17,skin,s*r*.97,0,0)).scale.set(.5,1,.8);
   }
-  if (spec.tip) tip = addTip(model.getObjectByName(spec.tip), c==='w' ? 0xfff3b0 : 0xc070ff);
-  if (tip) mats.push(tip.material);
-  const base = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial({color:SIDE[c].base, roughness:.35, metalness:.3, emissive:SIDE[c].base, emissiveIntensity:.12}));
-  base.position.y = .02; base.receiveShadow = true; g.add(base); mats.push(base.material);
-  const bones = {head:model.getObjectByName('head'), spine:model.getObjectByName('spine'), hips:model.getObjectByName('hips'),
-                 ul:model.getObjectByName('upperlegl'), ur:model.getObjectByName('upperlegr')};
+  tiny(coneAt(head,r*.12,r*.3,skin,0,-r*.06,r*1.02,8)).rotation.x = Math.PI/2;
+  tiny(boxAt(head,r*.4,r*.07,r*.08,lip,0,-r*.42,r*.86));
+}
+function humanBody(B, M, o){
+  lathe(B('hips'), [[0,-.07],[.14,-.07],[.155,.05],[.14,.2],[0,.2]], o.torso, .75);
+  lathe(B('spine'), [[0,0],[.135,0],[.13,.12],[.155,.24],[.165,.3],[0,.3]], o.torso, .72);
+  lathe(B('chest'), [[0,0],[.165,0],[.16,.07],[.12,.14],[.06,.17],[0,.17]], o.torso, .75);
+  put(B('chest'), geoLimb(.045,.042,.1), o.skin, 0, .2, 0);
+  for (const s of ['l','r']){
+    ball(B('upperarm'+s), .06, o.shoulder||o.sleeve);
+    limb(B('upperarm'+s), .327, .05, .04, o.sleeve);
+    ball(B('lowerarm'+s), .042, o.sleeve);
+    limb(B('lowerarm'+s), .286, .04, .032, o.fsleeve||o.sleeve);
+    if (o.cuff) put(B('lowerarm'+s), geoLimb(.045,.085,.16), o.cuff, 0, .22, 0);
+    ball(B('hand'+s), .042, o.hand, 0, .025, 0).scale.set(.8,1.15,1.15);
+    if (o.legs){
+      limb(B('upperleg'+s), .454, .072, .05, o.legs);
+      ball(B('lowerleg'+s), .052, o.knee||o.legs);
+      limb(B('lowerleg'+s), .402, .05, .038, o.legs);
+    }
+    limb(B('foot'+s), .18, .045, .05, o.boot);
+  }
+}
+function gown(B, mat, flare=.34, sz=.85){
+  return lathe(B('hips'), [[0,.2],[.14,.2],[.15,.05],[.18,-.2],[flare*.66,-.5],[flare*.88,-.78],[flare,-.87],[0,-.87]], mat, sz);
+}
+function head(B, M, skin, faceOpts){
+  const h = new THREE.Group(); h.position.y = .1; B('head').add(h);
+  ball(h, .1, skin); addFace(h, .1, M, skin, faceOpts);
+  return h;
+}
+function prop(model, src, name, slot, c, mats){
+  const p = ASSET[src].scene.getObjectByName(name).clone();
+  p.traverse(o => { o.visible = true; if (o.isMesh){ o.material = o.material.clone(); o.material.map = ASSET[src].tex[c]; mats.push(o.material); } });
+  p.scale.multiplyScalar(.6);   // props were sized for the chunky cartoon hands
+  model.getObjectByName(slot).add(p); return p;
+}
+
+const PIECE_BUILD = {
+  p(B, M, S, P){                      // foot soldier: kettle helm, mail, tabard, sword and round shield
+    const mail = M(0x9aa3ad,{r:.5,m:.35}), leather = M(0x5a3a22,{r:.85}), tab = M(S.robe), steel = M(0xd4dae4,{r:.35,m:.4}), skin = M(0xf0c8a0,{r:.8});
+    humanBody(B, M, {torso:mail, sleeve:mail, hand:leather, legs:M(S.dark), boot:leather, shoulder:tab, skin});
+    lathe(B('hips'), [[.2,-.32],[.17,-.05],[.152,.14]], M(S.robe,{side:DS}));
+    boxAt(B('spine'), .17,.3,.012, tab, 0,.14,.113);
+    ring(B('hips'), .15, .02, leather, .13, .75);
+    const h = head(B, M, skin, {angry:true});
+    put(h, new THREE.SphereGeometry(.108,16,8,0,Math.PI*2,0,Math.PI/2), steel, 0,.045,0); put(h, geoLimb(.145,.145,.012,20), steel, 0,.045,0);
+    P('Knight','1H_Sword','handslotr'); P('Knight','Round_Shield','handslotl');
+  },
+  n(B, M, S, P){                      // armoured knight: great helm with plume, tabard, cape, sword and shield
+    const plate = M(0xc3cbd6,{r:.3,m:.55}), tab = M(S.robe), gold = M(0xe8bb45,{r:.4,m:.4}), slit = M(0x111114), skin = M(0xf0c8a0,{r:.8});
+    humanBody(B, M, {torso:plate, sleeve:plate, hand:M(0x2a2a30,{m:.4}), legs:plate, knee:plate, boot:plate, shoulder:plate, skin});
+    lathe(B('hips'), [[.21,-.34],[.18,-.05],[.16,.14]], M(S.robe,{side:DS}));
+    boxAt(B('spine'), .19,.32,.014, tab, 0,.15,.114); boxAt(B('spine'), .04,.18,.016, gold, 0,.17,.12); boxAt(B('spine'), .13,.035,.016, gold, 0,.21,.12);
+    put(B('chest'), capeGeo(.17,.34,1.25), M(S.dark,{side:DS}), 0,.14-.625,-.01);
+    const h = new THREE.Group(); h.position.y = .1; B('head').add(h);
+    put(h, geoLimb(.11,.11,.21,18), plate, 0,.01,0); put(h, new THREE.SphereGeometry(.11,16,8,0,Math.PI*2,0,Math.PI/2), plate, 0,.115,0);
+    boxAt(h, .16,.02,.02, slit, 0,.03,.105); boxAt(h, .02,.08,.02, slit, 0,-.02,.105);
+    ball(h,.055,tab,0,.24,0); ball(h,.05,tab,0,.25,-.08); ball(h,.042,tab,0,.22,-.15); ball(h,.034,tab,0,.16,-.2);
+    P('Knight','1H_Sword','handslotr'); P('Knight','Badge_Shield','handslotl');
+  },
+  b(B, M, S, P){                      // bishop / warlock: long robe, surplice, mitre, beard, crystal staff
+    const robe = M(S.robe), white = M(0xf1ece0,{r:.9}), gold = M(0xe8bb45,{r:.4,m:.4}), skin = M(0xf0c8a0,{r:.8});
+    humanBody(B, M, {torso:robe, sleeve:robe, cuff:M(S.robe,{side:DS}), hand:skin, legs:null, boot:M(0x3a2a1a), skin});
+    gown(B, robe, .32);
+    lathe(B('hips'), [[.165,.1],[.2,-.2],[.25,-.46]], M(0xf1ece0,{r:.9,side:DS}));
+    for (const x of [-.05,.05]) boxAt(B('spine'), .035,.34,.012, gold, x,.14,.114);
+    put(B('chest'), geoLimb(.225,.12,.2,20,true), M(S.dark,{side:DS}), 0,.08,0);
+    const h = head(B, M, skin, {brow:0xdddddd});
+    coneAt(h,.07,.15,white,0,-.095,.05,10).rotation.x = Math.PI;
+    put(h, geoLimb(.103,.06,.24,18), white, 0,.17,0); coneAt(h,.06,.09,white,0,.33,0);
+    ring(h,.1,.013,gold,.06); boxAt(h,.022,.22,.012,gold,0,.17,.083).rotation.x = -.17;
+    boxAt(h,.014,.08,.014,gold,0,.41,0); boxAt(h,.05,.014,.014,gold,0,.42,0);
+    return {tip: addTip(P('Mage','2H_Staff','handslotr'), S===SIDE.w ? 0xfff3b0 : 0xc070ff)};
+  },
+  q(B, M, S, P){                      // queen / sorceress: flowing gown, long hair, crown, sceptre
+    const robe = M(S.robe), gold = M(0xe8bb45,{r:.4,m:.4}), skin = M(0xf0c8a0,{r:.8}), hair = M(S.hair,{r:.8});
+    humanBody(B, M, {torso:robe, sleeve:M(S.light), fsleeve:skin, hand:skin, legs:null, boot:gold, shoulder:M(S.light), skin});
+    gown(B, robe, .38, .9);
+    ring(B('hips'), .37, .018, gold, -.86, .9); ring(B('hips'), .145, .016, gold, .15, .75);
+    boxAt(B('spine'), .06,.14,.012, gold, 0,.2,.118);
+    put(B('chest'), capeGeo(.16,.4,1.25), M(S.dark,{side:DS}), 0,.14-.625,-.01);
+    ring(B('chest'), .06, .009, gold, .165); tiny(ball(B('chest'), .02, M(S.glow,{e:S.glow}), 0,.14,.07));
+    const h = head(B, M, skin, {lip:0xc2304a, brow:0x6a4a2a, eye:0x2a4a8a});
+    ball(h,.108,hair,0,.015,-.025); put(h, geoLimb(.11,.075,.34,14), hair, 0,-.17,-.06);
+    put(h, geoLimb(.1,.106,.08,20,true), M(0xf2c040,{r:.3,m:.6,side:DS}), 0,.11,0);
+    for (let i=0;i<7;i++){ const a = i/7*Math.PI*2, s = i===0 ? 1.5 : .8; coneAt(h,.018*s,.06*s,gold,Math.sin(a)*.104,.17+.01*s,Math.cos(a)*.104,6); }
+    tiny(ball(h,.022,M(S.glow,{e:S.glow}),0,.11,.108));
+    return {tip: addTip(P('Mage','1H_Wand','handslotr'), S.glow)};
+  },
+  k(B, M, S, P){                      // king: royal robe, ermine cape and collar, great beard, crown, sword
+    const robe = M(S.robe), gold = M(0xe8bb45,{r:.4,m:.4}), white = M(0xf5f1e8,{r:1}), skin = M(0xf0c8a0,{r:.8});
+    humanBody(B, M, {torso:robe, sleeve:robe, hand:skin, legs:null, boot:M(S.dark), shoulder:white, skin});
+    gown(B, robe, .36);
+    ring(B('hips'), .15, .025, gold, .15, .75); boxAt(B('hips'), .07,.06,.02, gold, 0,.15,.118);
+    put(B('chest'), capeGeo(.19,.44,1.28), M(S.dark,{side:DS}), 0,.15-.64,-.01);
+    ring(B('chest'), .16, .05, white, .13, .8);
+    for (let i=0;i<8;i++){ const a = i/8*Math.PI*2; tiny(ball(B('chest'), .013, M(0x111111), Math.sin(a)*.16,.17,Math.cos(a)*.13)); }
+    const h = head(B, M, skin, {brow:0xeeeeee, angry:true}), bw = M(0xece8de,{r:1});
+    ball(h,.09,bw,0,-.09,.045).scale.set(1,1.3,.8); boxAt(h,.13,.024,.03,bw,0,-.035,.1);
+    for (const s of [-1,1]) ball(h,.045,bw,s*.085,0,-.03);
+    ball(h,.095,M(0x7a1024,{r:.8}),0,.1,0);
+    put(h, geoLimb(.1,.112,.13,20,true), M(0xf2c040,{r:.3,m:.6,side:DS}), 0,.11,0);
+    for (let i=0;i<5;i++){ const a = i/5*Math.PI*2;
+      coneAt(h,.024,.09,gold,Math.sin(a)*.108,.21,Math.cos(a)*.108,6);
+      tiny(ball(h,.016,M(i%2?0x2a6cff:0xe0203a,{r:.2}),Math.sin(a)*.114,.11,Math.cos(a)*.114)); }
+    boxAt(h,.02,.1,.02,gold,0,.3,0); boxAt(h,.07,.02,.02,gold,0,.31,0);
+    P('Knight','1H_Sword','handslotr'); P('Knight','Badge_Shield','handslotl');
+  },
+  r(B, M, S){                         // stone man: a giant of rough rock with glowing eyes
+    const st = M(S.stone,{r:.95,flat:true}), st2 = M(new THREE.Color(S.stone).multiplyScalar(.7).getHex(),{r:1,flat:true}), eye = M(S.glow,{e:S.glow,ei:1.6});
+    const rock = (p,r,mat,x,y,z,sx=1,sy=1,sz=1) => { const m = put(p, new THREE.DodecahedronGeometry(r,0), mat, x,y,z); m.scale.set(sx,sy,sz); m.rotation.set(x*7,y*5,z*3); return m; };
+    rock(B('hips'),.2,st2,0,.05,0,1.2,.8,1);
+    rock(B('spine'),.25,st,0,.16,0,1.1,1,.85); rock(B('chest'),.28,st,0,.1,0,1.35,.85,.9);
+    rock(B('chest'),.12,st2,.18,.12,.08); rock(B('chest'),.1,st2,-.2,.05,.1);
+    const h = new THREE.Group(); h.position.y = .08; B('head').add(h);
+    rock(h,.14,st,0,.02,.02);
+    for (let i=0;i<4;i++){ const a = i*Math.PI/2+Math.PI/4; boxAt(h,.07,.07,.07,st,Math.sin(a)*.09,.14,Math.cos(a)*.09).rotation.y = a; }
+    tiny(ball(h,.028,eye,.05,.03,.13)); tiny(ball(h,.028,eye,-.05,.03,.13)); boxAt(h,.16,.035,.05,st2,0,.075,.115);
+    for (const s of ['l','r']){
+      rock(B('upperarm'+s),.11,st,0,.1,0); rock(B('upperarm'+s),.1,st2,0,.26,0);
+      rock(B('lowerarm'+s),.1,st,0,.1,0); rock(B('lowerarm'+s),.09,st2,0,.24,0);
+      rock(B('hand'+s),.13,st,0,.05,0);
+      rock(B('upperleg'+s),.13,st,0,.14,0); rock(B('upperleg'+s),.11,st2,0,.34,0);
+      rock(B('lowerleg'+s),.11,st,0,.12,0); rock(B('lowerleg'+s),.1,st2,0,.3,0);
+      rock(B('foot'+s),.1,st,0,.08,0,1,1.3,.8);
+    }
+  },
+};
+
+// the cartoon animations hold the arms wide for a chunky body; bring them in to a slim figure
+const TUCK = [new THREE.Quaternion().setFromAxisAngle(new V3(0,0,1),-.5), new THREE.Quaternion().setFromAxisAngle(new V3(0,0,1),.5)];
+function tuckArms(U){ if (U.arms){ U.arms[0].quaternion.premultiply(TUCK[0]); U.arms[1].quaternion.premultiply(TUCK[1]); } }
+const baseGeo = new THREE.CylinderGeometry(.34,.37,.04,32);
+function build(t,c){
+  const spec = CAST[t], S = SIDE[c], A = ASSET.Knight;
+  const g = new THREE.Group(), rig = new THREE.Group(), model = THREE.SkeletonUtils.clone(A.scene);
+  const old = []; model.traverse(o => { if (o.isMesh) old.push(o); }); old.forEach(o => o.parent.remove(o));   // keep only the skeleton
+  rig.add(model); g.add(rig);
+  const mats = [];
+  const M = (color, o={}) => { const m = new THREE.MeshStandardMaterial({color, map:o.map||null, roughness:o.r??.6, metalness:o.m??.05, emissive:o.e??0x000000, emissiveIntensity:o.ei??1, side:o.side??THREE.FrontSide, flatShading:!!o.flat}); mats.push(m); return m; };
+  const B = n => model.getObjectByName(n);
+  const P = (src, name, slot) => prop(model, src, name, slot, c, mats);
+  const extra = PIECE_BUILD[t](B, M, S, P) || {};
+  model.traverse(o => { if (o.isMesh){ o.castShadow = !o.userData.ns; o.receiveShadow = true; o.frustumCulled = false; } });
+  const s = spec.height/FIG_TOP; model.scale.setScalar(s); model.position.y = .04;
+  const base = put(g, baseGeo, M(S.base,{r:.35,m:.3,e:S.base,ei:.12}), 0,.02,0); base.receiveShadow = true;
   const U = {body:model, rig, mixer:new THREE.AnimationMixer(model), actions:{}, cur:null, type:t, color:c, h:spec.height, mats,
-             idle:spec.idle, tip, hand:model.getObjectByName('handslotr'), bones, build:P, caster:!!spec.caster};
-  g.userData = U;
-  loopAnim(g, spec.idle, 0, true);
-  // fit the reshaped body to the piece's height
-  U.mixer.update(0); applyBuild(U); model.updateMatrixWorld(true);
-  const hp = new V3(); bones.head.getWorldPosition(hp);
-  const top = hp.y + (A.top-A.headY)*P.head, s = spec.height/(top-A.minY);
-  model.scale.setScalar(s); model.position.y = .04-A.minY*s;
-  if (spec.stone){ rig.scale.set(1.12,1,1.12); U.tower = makeTower(c, mats); g.add(U.tower); rig.visible = false; U.form = 'tower'; }
+             idle:spec.idle, tip:extra.tip||null, hand:B('handslotr'), caster:!!spec.caster, arms:[B('upperarml'), B('upperarmr')]};
+  if (extra.tip) mats.push(extra.tip.material);
+  if (t==='r'){ U.tower = makeTower(c, M); g.add(U.tower); rig.visible = false; U.form = 'tower'; }
   mats.forEach(m => { m.userData.e0 = m.emissive.getHex(); m.userData.ei0 = m.emissiveIntensity; });
+  g.userData = U;
+  loopAnim(g, spec.idle, 0, true); U.mixer.update(0); tuckArms(U);
   return g;
 }
 
@@ -871,7 +966,7 @@ async function leapSmash(ag, vg){
 
 /* ---- each piece's arsenal: opening blows and finishing moves ---- */
 const ARSENAL = {
-  p:{open:['Dualwield_Melee_Attack_Stab','Dualwield_Melee_Attack_Chop'], fins:['slice','stab'], reach:.8},
+  p:{open:['1H_Melee_Attack_Stab','1H_Melee_Attack_Chop'], fins:['slice','stab'], reach:.85},
   n:{open:['1H_Melee_Attack_Slice_Diagonal','1H_Melee_Attack_Chop'], fins:['slash','spin'], reach:.95},
   b:{open:['Spellcast_Shoot','2H_Melee_Attack_Chop'], fins:['lightning','holy','fireball'], reach:1.1},
   r:{open:['Unarmed_Melee_Attack_Punch_A','Unarmed_Melee_Attack_Punch_B'], fins:['leap'], reach:.9},
@@ -879,8 +974,8 @@ const ARSENAL = {
   k:{open:['1H_Melee_Attack_Chop','1H_Melee_Attack_Slice_Diagonal'], fins:['kick','kick','lightning'], reach:.95},
 };
 const FINISHERS = {
-  slice: (ag,vg) => strike(ag, vg, 'Dualwield_Melee_Attack_Slice', () => die('fall',vg,ag)),
-  stab: (ag,vg) => strike(ag, vg, 'Dualwield_Melee_Attack_Stab', () => die('fallB',vg,ag)),
+  slice: (ag,vg) => strike(ag, vg, '1H_Melee_Attack_Slice_Diagonal', () => die('fall',vg,ag)),
+  stab: (ag,vg) => strike(ag, vg, '1H_Melee_Attack_Stab', () => die('fallB',vg,ag)),
   slash: (ag,vg) => strike(ag, vg, '1H_Melee_Attack_Slice_Horizontal', () => die('fallB',vg,ag)),
   spin: (ag,vg) => strike(ag, vg, '2H_Melee_Attack_Spin', () => die('fall',vg,ag)),
   fireball: (ag,vg) => strike(ag, vg, 'Spellcast_Shoot', () => die('burn',vg,ag), () => SPELL.fireball(ag,vg)),
@@ -1129,7 +1224,7 @@ function loop(now){
     p.m.material.opacity = p.bounce ? Math.min(1,(p.life-p.age)/(p.life*.3)) : 1-p.age/p.life;
   }
   const mdt = Math.min(.25, raw);
-  for (const pg of piecesGroup.children){ pg.userData.mixer.update(mdt); applyBuild(pg.userData); }
+  for (const pg of piecesGroup.children){ pg.userData.mixer.update(mdt); tuckArms(pg.userData); }
   const pose = cine || orbitPose();
   camera.position.copy(pose.pos);
   if (shake>0){ camera.position.x += (Math.random()-.5)*shake; camera.position.y += (Math.random()-.5)*shake; shake = Math.max(0, shake-dt*1.2); }
